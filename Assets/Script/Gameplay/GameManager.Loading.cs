@@ -9,6 +9,8 @@ using YARG.Core.Chart;
 using YARG.Core.Engine;
 using YARG.Core.Logging;
 using YARG.Core.Replays;
+using YARG.Core.Song;
+using YARG.Helpers;
 using YARG.Gameplay.HUD;
 using YARG.Gameplay.Player;
 using YARG.Menu;
@@ -159,6 +161,26 @@ namespace YARG.Gameplay
                         player.ReplayIndex = replayIndex;
                         replayIndex++;
                     }
+                }
+            }
+
+            if (OnlineSongs.IsOnline(PathHelper.OnlineSongsPath, Song) && !OnlineSongs.StemsReady(Song.ActualLocation))
+            {
+                context.SetLoadingText("Downloading song...");
+                var download = UniTask.RunOnThreadPool(() => OnlineSongs.FetchStems(Song.ActualLocation));
+                while (download.Status == UniTaskStatus.Pending)
+                {
+                    context.SetSubText(OnlineSongs.Status);
+                    await UniTask.NextFrame();
+                }
+
+                if (!await download)
+                {
+                    ToastManager.ToastError(Leaderboards.SignedIn
+                        ? "Couldn't download this song. Check your internet connection."
+                        : YARG.Song.SongContainer.OFFLINE_NOTICE);
+                    global.LoadScene(SceneIndex.Menu);
+                    return;
                 }
             }
 

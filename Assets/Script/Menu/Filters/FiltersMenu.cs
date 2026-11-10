@@ -349,18 +349,12 @@ namespace YARG.Menu.Filters
         {
             int rowIndex = 0;
 
-            AddHeader(container, Localize.Key("Menu.Filters.OptionsHeader"));
-            rowIndex = 0;
-            AddDropdown(container, navGroup, Localize.Key("Menu.Filters.SortedBy"))?.AssignIndex(rowIndex++);
-            AddToggle(container, navGroup, Localize.Key("Menu.Filters.ShowRecommendations"))?.AssignIndex(rowIndex++);
-
             AddHeader(container, Localize.Key("Menu.Filters.FiltersHeader"));
             rowIndex = 0;
             AddGroup(container, navGroup, new FilterKey(FilterGroup.Genre), Localize.Key("Menu.Filters.Genres"))?.AssignIndex(rowIndex++);
             AddGroup(container, navGroup, new FilterKey(FilterGroup.Subgenre), Localize.Key("Menu.Filters.Subgenres"))?.AssignIndex(rowIndex++);
             AddGroup(container, navGroup, new FilterKey(FilterGroup.Decade), Localize.Key("Menu.Filters.Decades"))?.AssignIndex(rowIndex++);
             AddGroup(container, navGroup, new FilterKey(FilterGroup.VocalParts), Localize.Key("Menu.Filters.VocalParts.Name"))?.AssignIndex(rowIndex++);
-            AddGroup(container, navGroup, new FilterKey(FilterGroup.Source), Localize.Key("Menu.Filters.Sources"))?.AssignIndex(rowIndex++);
             AddGroup(container, navGroup, new FilterKey(FilterGroup.Charter), Localize.Key("Menu.Filters.Charters"))?.AssignIndex(rowIndex++);
 
             var intensityContexts = GetIntensityFilterContexts();

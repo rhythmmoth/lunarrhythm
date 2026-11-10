@@ -1,0 +1,1540 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using YARG.Core.Chart;
+using YARG.Core.Extensions;
+using YARG.Core.Logging;
+using YARG.Core.Utility;
+
+namespace YARG.Core.Engine
+{
+    public abstract class BaseEngine<TNoteType, TEngineParams, TEngineStats> : BaseEngine
+        where TNoteType : Note<TNoteType>
+        where TEngineParams : BaseEngineParameters
+        where TEngineStats : BaseStats, new()
+    {
+        public delegate void NoteHitEvent(int noteIndex, TNoteType note);
+
+        public delegate void NoteMissedEvent(int noteIndex, TNoteType note);
+
+        public delegate void StarPowerPhraseHitEvent(TNoteType note);
+
+        public delegate void StarPowerPhraseMissEvent(TNoteType note);
+
+        public delegate void SustainStartEvent(TNoteType note);
+
+        public delegate void SustainEndEvent(TNoteType note, double timeEnded, bool finished);
+
+        public delegate void CountdownChangeEvent(double countdownLength, double endTime);
+
+        public NoteHitEvent?    OnNoteHit;
+        public NoteMissedEvent? OnNoteMissed;
+
+        public StarPowerPhraseHitEvent?  OnStarPowerPhraseHit;
+        public StarPowerPhraseMissEvent? OnStarPowerPhraseMissed;
+
+        public SustainStartEvent? OnSustainStart;
+        public SustainEndEvent?   OnSustainEnd;
+
+        public CountdownChangeEvent? OnCountdownChange;
+
+        protected SustainList<TNoteType> ActiveSustains = new(10);
+
+        protected double WhammyTicksRemainder = 0.0;
+
+        protected readonly double TicksPerSustainPoint;
+        protected readonly uint   SustainBurstThreshold;
+
+        public readonly TEngineStats EngineStats;
+
+        protected readonly InstrumentDifficulty<TNoteType> Chart;
+
+        protected readonly List<TNoteType> Notes;
+        protected readonly TEngineParams   EngineParameters;
+
+        public override BaseEngineParameters BaseParameters => EngineParameters;
+        public override BaseStats            BaseStats      => EngineStats;
+
+        protected BaseEngine(InstrumentDifficulty<TNoteType> chart, SyncTrack syncTrack,
+            TEngineParams engineParameters, bool isChordSeparate, bool isBot)
+            : base(syncTrack, isChordSeparate, isBot)
+        {
+            Chart = chart;
+            Notes = Chart.Notes;
+            EngineParameters = engineParameters;
+
+            StarPowerWhammyTimer = new EngineTimer("Star Power Whammy", engineParameters.StarPowerWhammyBuffer);
+
+            EngineStats = new TEngineStats();
+            Reset();
+
+            EngineStats.ScoreMultiplier = 1;
+            if (TreatChordAsSeparate)
+            {
+                foreach (var note in Notes)
+                {
+                    // Notes during a BRE don't count for TotalNotes
+                    // TODO: Gate this behind BRE enablement
+                    if (note.IsBigRockEnding)
+                    {
+                        continue;
+                    }
+
+                    EngineStats.TotalNotes += GetNumberOfNotes(note);
+                }
+            }
+            else
+            {
+                EngineStats.TotalNotes = Notes.Count;
+
+                // Remove BRE notes from TotalNotes
+                foreach (var note in Notes)
+                {
+                    if (note.IsBigRockEnding)
+                    {
+                        EngineStats.TotalNotes--;
+                    }
+                }
+            }
+
+            EngineStats.TotalChords = EngineStats.TotalNotes;
+
+            EngineStats.TotalStarPowerPhrases = Chart.Phrases.Count((phrase) => phrase.Type == PhraseType.StarPower);
+
+            TicksPerSustainPoint = SyncTrack.Resolution / (double) SustainPointsPerBeat;
+            SustainBurstThreshold = SyncTrack.Resolution / SUSTAIN_BURST_FRACTION;
+
+            // This method should only rely on the `Notes` property (which is assigned above).
+            // ReSharper disable once VirtualMemberCallInConstructor
+            (BaseScore, BaseNoteScore) = CalculateChartScores();
+
+            Solos = GetSoloSections();
+            Codas = GetCodaSections();
+            EngineStats.MaxSoloBonusPoints = CalculateTotalSoloBonus();
+
+            StarScoreThresholds = PopulateStarScoreThresholds(engineParameters.StarMultiplierThresholds, engineParameters.SoloBonusStarMultiplierThresholds, BaseScore, EngineStats.MaxSoloBonusPoints);
+        }
+
+        public static int[] PopulateStarScoreThresholds(float[] multiplierThresholds, float[] soloBonusMultiplierThresholds, int baseScore, int soloScore)
+        {
+            var starScoreThresh = new int[multiplierThresholds.Length];
+
+            for (int i = 0; i < multiplierThresholds.Length; i++)
+            {
+                starScoreThresh[i] = (int)Math.Floor(baseScore * multiplierThresholds[i] + soloScore * soloBonusMultiplierThresholds[i]);
+            }
+
+            return starScoreThresh;
+        }
+
+        protected override void GenerateQueuedUpdates(double nextTime)
+        {
+            base.GenerateQueuedUpdates(nextTime);
+
+            double previousTime = CurrentTime;
+            uint previousTick = CurrentTick;
+            uint previousSpTick = StarPowerTickPosition;
+
+            foreach (var sustain in ActiveSustains)
+            {
+                var burstTime = sustain.GetEndTime(SyncTrack, SustainBurstThreshold);
+                var endTime = sustain.GetEndTime(SyncTrack, 0);
+
+                var scaledDropLeniency = EngineParameters.SustainDropLeniency * EngineParameters.SongSpeed;
+                var leniencyDropTime = sustain.LeniencyDropTime + scaledDropLeniency;
+
+                if (sustain.IsLeniencyHeld && IsTimeBetween(leniencyDropTime, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing sustain (tick: {0}) leniency drop time at {1}", sustain.Note.Tick,
+                        leniencyDropTime);
+                    QueueUpdateTime(leniencyDropTime, "Sustain Leniency Drop");
+                }
+
+                // Burst time is for scoring, so that scoring finishes at the correct time
+                if (IsTimeBetween(burstTime, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing sustain (tick: {0}) burst time at {1}", sustain.Note.Tick,
+                        burstTime);
+                    QueueUpdateTime(burstTime, "Sustain Burst");
+                }
+
+                // The true end of the sustain is for hit logic. Sustains are "kept" even after the burst ticks so must
+                // also be handled.
+                if (IsTimeBetween(endTime, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing sustain (tick: {0}) end time at {1}", sustain.Note.Tick,
+                        endTime);
+                    QueueUpdateTime(endTime, "Sustain End");
+                }
+            }
+
+            for (int i = NoteIndex; i < Notes.Count; i++)
+            {
+                var note = Notes[i];
+
+                var hitWindow = EngineParameters.HitWindow.CalculateHitWindow(GetAverageNoteDistance(note));
+
+                var noteFrontEnd = note.Time + EngineParameters.HitWindow.GetFrontEnd(hitWindow);
+                var noteBackEnd = note.Time + EngineParameters.HitWindow.GetBackEnd(hitWindow);
+
+                // Note will not reach front end yet
+                if (nextTime < noteFrontEnd)
+                {
+                    //YargLogger.LogFormatTrace("Note {0} front end will not be reached at {1}", i, nextTime);
+                    break;
+                }
+
+                if (!IsBot)
+                {
+                    // Earliest the note can be hit
+                    if (IsTimeBetween(noteFrontEnd, previousTime, nextTime))
+                    {
+                        YargLogger.LogFormatTrace("Queuing note {0} front end hit time at {1}", i, noteFrontEnd);
+                        QueueUpdateTime(noteFrontEnd, "Note Front End");
+                    }
+                }
+                else
+                {
+                    if (IsTimeBetween(note.Time, previousTime, nextTime))
+                    {
+                        YargLogger.LogFormatTrace("Queuing bot note {0} at {1}", i, note.Time);
+                        QueueUpdateTime(note.Time, "Bot Note Time");
+                    }
+                }
+
+                // Note will not be out of time on the exact back end
+                // So we increment the back end by 1 bit exactly
+                // (essentially just 1 epsilon bigger)
+                var noteBackEndIncrement = MathUtil.BitIncrement(noteBackEnd);
+
+                if (IsTimeBetween(noteBackEndIncrement, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing note {0} back end miss time at {1}", i, noteBackEndIncrement);
+                    QueueUpdateTime(noteBackEndIncrement, "Note Back End");
+                }
+            }
+
+            if (StarPowerWhammyTimer.IsActive)
+            {
+                if (IsTimeBetween(StarPowerWhammyTimer.EndTime, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing star power whammy end time at {0}",
+                        StarPowerWhammyTimer.EndTime);
+                    QueueUpdateTime(StarPowerWhammyTimer.EndTime, "Star Power Whammy End");
+                }
+
+                if (IsStarPowerSustainActive())
+                {
+                    uint lastSpTickAmount = BaseStats.StarPowerTickAmount;
+                    uint spTickAmount = BaseStats.StarPowerTickAmount;
+
+                    double maxWhammyTime = Math.Min(StarPowerWhammyTimer.EndTime, nextTime);
+                    uint maxWhammySpTick = SyncTrack.TimeToMeasureTick(maxWhammyTime);
+                    uint maxWhammyTick = SyncTrack.MeasureTickToQuarterTick(maxWhammySpTick);
+
+                    // Simulate whammy gain
+                    double whammyTickRemainder = WhammyTicksRemainder;
+                    uint whammyGain = CalculateStarPowerGain(maxWhammyTick, Math.Max(previousTick, FirstWhammyTick), ref whammyTickRemainder);
+                    spTickAmount += whammyGain;
+
+                    if (BaseStats.IsStarPowerActive)
+                    {
+                        // Simulate SP drain
+                        uint spDrain = CalculateStarPowerDrain(maxWhammySpTick, previousSpTick);
+
+                        // Check if the ticks the player would have drops to zero or less
+                        if (spTickAmount <= spDrain)
+                        {
+                            spTickAmount = 0;
+
+                            YargLogger.LogFormatDebug("Simulated SP gain/drain and found an end time at {0}", maxWhammyTime);
+                            QueueUpdateTime(maxWhammyTime, "SP End Time");
+                        }
+                        else
+                        {
+                            spTickAmount -= spDrain;
+                        }
+                    }
+
+                    // Synchronize the point at which SP can be activated
+                    if (lastSpTickAmount < TicksToActivateStarPower && spTickAmount >= TicksToActivateStarPower)
+                    {
+                        var ticksToHalfBar = TicksToActivateStarPower - BaseStats.StarPowerTickAmount;
+                        var timeOfHalfBar = SyncTrack.TickToTime(previousTick + ticksToHalfBar);
+
+                        if (IsTimeBetween(timeOfHalfBar, previousTime, nextTime))
+                        {
+                            YargLogger.LogFormatTrace("Queuing star power half bar time at {0}",
+                                timeOfHalfBar);
+                            QueueUpdateTime(timeOfHalfBar, "Star Power Half Bar");
+                        }
+                    }
+
+                    // If the ticks exceed a full bar, they are capped and this needs to be synchronised
+                    if (lastSpTickAmount < TicksPerFullSpBar && spTickAmount >= TicksPerFullSpBar)
+                    {
+                        YargLogger.LogFormatTrace("Simulated SP gain/drain and found a full SP bar at {0}", maxWhammyTime);
+                        QueueUpdateTime(maxWhammyTime, "SP Bar Cap Time");
+                    }
+                }
+            }
+
+            if (BaseStats.IsStarPowerActive)
+            {
+                if (IsTimeBetween(StarPowerEndTime, previousTime, nextTime))
+                {
+                    YargLogger.LogFormatTrace("Queuing Star Power End Time at {0}", StarPowerEndTime);
+                    QueueUpdateTime(StarPowerEndTime, "SP End Time");
+                }
+            }
+
+            if (CurrentWaitCountdownIndex < WaitCountdowns.Count)
+            {
+                // Queue updates for countdown start/end/change
+
+                if (IsWaitCountdownActive)
+                {
+                    var currentCountdown = WaitCountdowns[CurrentWaitCountdownIndex];
+                    double endTime = currentCountdown.TimeEnd;
+
+                    if (IsTimeBetween(endTime, previousTime, nextTime))
+                    {
+                        YargLogger.LogFormatTrace("Queuing countdown {0} deactivation at {1}",
+                            CurrentWaitCountdownIndex, endTime);
+                        QueueUpdateTime(endTime, "Deactivate Countdown");
+                    }
+                }
+                else
+                {
+                    int nextCountdownIndex;
+
+                    if (previousTime < WaitCountdowns[CurrentWaitCountdownIndex].Time)
+                    {
+                        // No countdowns are currently displayed
+                        // CurrentWaitCountdownIndex has already been incremented for the next countdown
+                        nextCountdownIndex = CurrentWaitCountdownIndex;
+                    }
+                    else
+                    {
+                        // A countdown is currently onscreen, but is past its deactivation time and is fading out
+                        // CurrentWaitCountdownIndex will not be incremented until the progress bar no longer needs updating
+                        nextCountdownIndex = CurrentWaitCountdownIndex + 1;
+                    }
+
+                    if (nextCountdownIndex < WaitCountdowns.Count)
+                    {
+                        double nextCountdownStartTime = WaitCountdowns[nextCountdownIndex].Time;
+
+                        if (IsTimeBetween(nextCountdownStartTime, previousTime, nextTime))
+                        {
+                            YargLogger.LogFormatTrace("Queuing countdown {0} start time at {1}", nextCountdownIndex,
+                                nextCountdownStartTime);
+                            QueueUpdateTime(nextCountdownStartTime, "Activate Countdown");
+                        }
+                    }
+                }
+            }
+
+            if (IsLaneActive)
+            {
+                if (IsTimeBetween(LaneAutohitExpireTime, previousTime, nextTime))
+                {
+                    QueueUpdateTime(LaneAutohitExpireTime, "Potential Lane Expiration Time");
+                }
+            }
+        }
+
+        protected void StartWhammyTimer(double time)
+        {
+            if (!StarPowerWhammyTimer.IsActive)
+            {
+                FirstWhammyTick = SyncTrack.TimeToTick(time);
+                WhammyTicksRemainder = 0;
+                YargLogger.LogTrace($"Setting FirstWhammyTick to {FirstWhammyTick}");
+            }
+            StarPowerWhammyTimer.Start(time);
+        }
+
+        protected override void UpdateTimeVariables(double time)
+        {
+            YargLogger.LogTrace($"REQUIRED LANE NOTE: {RequiredLaneNote}");
+
+            if (time < CurrentTime)
+            {
+                YargLogger.FailFormat("Time cannot go backwards! Current time: {0}, new time: {1}", CurrentTime,
+                    time);
+            }
+
+            LastUpdateTime = CurrentTime;
+            LastTick = CurrentTick;
+
+            CurrentTime = time;
+            CurrentTick = GetCurrentTick(time);
+
+            // Check to see if a coda has started or ended
+            if (CurrentCodaIndex < Codas.Count)
+            {
+                if (time >= Codas[CurrentCodaIndex].StartTime && !CodaHasStarted && !InhibitCoda)
+                {
+                    YargLogger.LogFormatTrace("Coda {0} activated at time {1}", CurrentCodaIndex, time);
+                    StartCoda();
+                }
+                else if (time > Codas[CurrentCodaIndex].EndTime && IsCodaActive)
+                {
+                    YargLogger.LogFormatTrace("Coda {0} deactivated at time {1}", CurrentCodaIndex, time);
+                    IsCodaActive = false;
+                }
+            }
+
+            // Only check for WaitCountdowns in this chart if there are any remaining
+            if (CurrentWaitCountdownIndex < WaitCountdowns.Count)
+            {
+                var currentCountdown = WaitCountdowns[CurrentWaitCountdownIndex];
+
+                if (time >= currentCountdown.Time)
+                {
+                    if (time < currentCountdown.TimeEnd)
+                    {
+                        // This countdown should be displayed onscreen
+                        if (!IsWaitCountdownActive)
+                        {
+                            // Entered new countdown window
+                            IsWaitCountdownActive = true;
+                            YargLogger.LogFormatTrace("Countdown {0} activated at time {1}. Expected time: {2}", CurrentWaitCountdownIndex, time, currentCountdown.Time);
+                        }
+
+                        UpdateCountdown(currentCountdown.TimeLength, currentCountdown.TimeEnd);
+                    }
+                    else
+                    {
+                        if (IsWaitCountdownActive)
+                        {
+                            IsWaitCountdownActive = false;
+                            YargLogger.LogFormatTrace("Countdown {0} deactivated at time {1}. Expected time: {2}", CurrentWaitCountdownIndex, time, currentCountdown.TimeEnd);
+                        }
+
+                        CurrentWaitCountdownIndex++;
+                    }
+                }
+            }
+        }
+
+        public override void AllowStarPower(bool isAllowed)
+        {
+            if (isAllowed == StarPowerIsAllowed)
+            {
+                return;
+            }
+
+            StarPowerIsAllowed = isAllowed;
+
+            foreach (var note in Notes)
+            {
+                if (isAllowed)
+                {
+                    note.ResetFlags();
+                }
+                else if (note.IsStarPower)
+                {
+                    note.Flags &= ~NoteFlags.StarPower;
+                    foreach (var childNote in note.ChildNotes)
+                    {
+                        childNote.Flags &= ~NoteFlags.StarPower;
+                    }
+                }
+            }
+        }
+
+        public override void Reset(bool keepCurrentButtons = false)
+        {
+            base.Reset();
+
+            InputQueue.Clear();
+
+            EngineStats.Reset();
+
+            StarPowerWhammyTimer.Reset();
+
+            foreach (var note in Notes)
+            {
+                note.ResetNoteState();
+
+                if (!StarPowerIsAllowed && note.IsStarPower)
+                {
+                    note.Flags &= ~NoteFlags.StarPower;
+                    foreach (var childNote in note.ChildNotes)
+                    {
+                        childNote.Flags &= ~NoteFlags.StarPower;
+                    }
+                }
+            }
+
+            foreach (var solo in Solos)
+            {
+                solo.NotesHit = 0;
+                solo.SoloBonus = 0;
+            }
+
+            foreach (var coda in Codas)
+            {
+                coda.Reset();
+            }
+
+            GetTotalLanes();
+        }
+
+        protected abstract void CheckForNoteHit();
+
+        /// <summary>
+        /// Checks if the given note can be hit with the current input
+        /// </summary>
+        /// <param name="note">The Note to attempt to hit.</param>
+        /// <returns>True if note can be hit. False otherwise.</returns>
+        protected abstract bool CanNoteBeHit(TNoteType note);
+
+        protected abstract bool CanSustainHold(TNoteType note);
+
+        protected virtual void HitNote(TNoteType note)
+        {
+            // The coda ends on the final note of the section. That note may be a chord, but the
+            // CodaEnd marker sits on a single sub-note, so only end the coda once the whole chord
+            // is resolved — otherwise hitting one sub-note (e.g. just the kick) ends the coda early
+            // and banks the bonus without the player completing the final chord.
+            if (CodaHasStarted && ChordHasCodaEnd(note) && note.ParentOrSelf.WasFullyHitOrMissed())
+            {
+                EndCoda();
+            }
+
+            if (note.ParentOrSelf.WasFullyHitOrMissed())
+            {
+                AdvanceToNextNote(note);
+            }
+
+            if ((!LanesExist && !note.IsLaneEnd) || !note.IsLane || !BaseParameters.EnableLanes)
+            {
+                return;
+            }
+
+            if (note.IsLaneStart)
+            {
+                YargLogger.LogFormatTrace("Starting lane behavior at time {0}. ", CurrentTime);
+
+                // This was a manually hit lane note while lane behavior was disabled,
+                // either IsLaneStart or starting a new combo after a mid-lane miss
+                if (note.IsTrill && note.NextNote!.IsTrill)
+                {
+                    RequiredLaneNote = note.NextNote!.LaneNote;
+                    NextTrillNote = note.LaneNote;
+                }
+                else
+                {
+                    RequiredLaneNote = note.LaneNote;
+                }
+
+                // Future updates during this lane will be handled on SubmitLaneNote inputs
+                UpdateLaneAutohitExpireTime();
+            }
+            else if (note.IsLaneEnd)
+            {
+                YargLogger.LogFormatTrace("Lane ending at {0}", CurrentTime);
+                RequiredLaneNote = -1;
+                NextTrillNote = -1;
+            }
+
+            YargLogger.LogFormatTrace("Lane note hit at {0}", CurrentTime);
+        }
+
+        // Intercept a missed note while a lane phrase is active
+        protected bool AutohitNoteFromLane(TNoteType note)
+        {
+            if (note.Time > LaneAutohitExpireTime)
+            {
+                return false;
+            }
+
+            if (note.IsLane)
+            {
+                if (note.IsLaneStart)
+                {
+                    // The autohit window at the end of the previous lane overlaps with the start of this one
+                    // The first note in a lane must be manually hit in order to count
+                    return false;
+                }
+
+                YargLogger.LogFormatTrace("Missed note with time of {0} was forgiven by lane", note.Time);
+                HitNote(note);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        protected virtual void MissNote(TNoteType note)
+        {
+            if (CodaHasStarted)
+            {
+                Codas[CurrentCodaIndex].MissNote();
+            }
+
+            // Mirror HitNote: end the coda only once the whole final chord is resolved.
+            if (CodaHasStarted && ChordHasCodaEnd(note) && note.ParentOrSelf.WasFullyHitOrMissed())
+            {
+                EndCoda();
+            }
+
+            if (note.ParentOrSelf.WasFullyHitOrMissed())
+            {
+                AdvanceToNextNote(note);
+            }
+
+            // If that note was the start of a lane, set the lane note values
+            if (note.IsLaneStart)
+            {
+                RequiredLaneNote = note.LaneNote;
+                NextTrillNote = note.IsTremolo ? -1 : note.NextNote!.LaneNote;
+            }
+
+            // If that note was the end of a lane, and we haven't already transitioned into a new lane, then clear the lane note values
+            if (note.IsLaneEnd && (RequiredLaneNote == note.LaneNote || NextTrillNote == note.LaneNote))
+            {
+                RequiredLaneNote = -1;
+                NextTrillNote = -1;
+            }
+        }
+
+        protected void SubmitLaneNote(int newNote)
+        {
+            if (!IsLaneActive || NoteIndex >= Notes.Count)
+            {
+                return;
+            }
+
+            if (newNote == RequiredLaneNote)
+            {
+                // Required input received, extend the lane expiration time
+                var currentNote = Notes[NoteIndex].ParentOrSelf;
+
+                var containsLaneNote = false;
+                foreach (var note in currentNote.AllNotes)
+                {
+                    if (note.IsLane)
+                    {
+                        containsLaneNote = true;
+                        break;
+                    }
+                }
+
+                if (!containsLaneNote)
+                {
+                    // This is either a non-lane note in the middle of the phrase
+                    // Or we are in overstrum forgiveness window after lane has ended
+                    YargLogger.LogFormatTrace("Lane input did not extend LaneExpireTime at {0}", CurrentTime);
+                    return;
+                }
+
+
+                UpdateLaneAutohitExpireTime();
+
+                // Update next required note for trills to ensure alternating inputs
+                if (NextTrillNote != -1)
+                {
+                    (RequiredLaneNote, NextTrillNote) = (NextTrillNote, RequiredLaneNote);
+                }
+            }
+        }
+
+        protected virtual bool ActiveLaneIncludesNote(int inputNote)
+        {
+            if (!IsLaneActive)
+            {
+                return false;
+            }
+
+            if (inputNote == RequiredLaneNote || (NextTrillNote != -1 && inputNote == NextTrillNote))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        // This cares whether the input would satisfy the lane that's providing leniency.
+        // Used by Drums and Keys engines to provide forgiveness only for inputs that would satisfy a nearby lane, not for unrelated inputs.
+        // Guitar engine has a parameterless version that doesn't check inputs against adjacent lanes.
+        protected bool IsInLaneLeniencyWindow(int inputNote)
+        {
+            if (IsLaneActive)
+            {
+                return false;
+            }
+
+            if (
+                NoteIndex < Notes.Count && // There is a next note
+                Notes[NoteIndex].IsLaneStart && // That note is a lane start
+                Notes[NoteIndex].Time - CurrentTime < EngineParameters.HitWindow.LaneProximityProtectionWindow && // That lane is starting soon
+                ProximalLaneForgivesInput(inputNote, Notes[NoteIndex]) // That lane forgives this input
+            )
+            {
+                return true;
+            }
+
+            return (
+                NoteIndex > 0 && // There is a previous note
+                Notes[NoteIndex - 1].IsLaneEnd && // That note was a lane end
+                CurrentTime - Notes[NoteIndex - 1].Time < EngineParameters.HitWindow.LaneProximityProtectionWindow && // That lane ended recently
+                ProximalLaneForgivesInput(inputNote, Notes[NoteIndex - 1]) // That lane forgives this input
+            );
+        }
+
+        protected void UpdateLaneAutohitExpireTime()
+        {
+            LaneAutohitExpireTime = CurrentTime + EngineParameters.HitWindow.LaneAutohitWindow;
+            YargLogger.LogFormatDebug("LaneExpireTime extended to {0}. LaneAutohitWindow {1}. Increment {2}.", LaneAutohitExpireTime, EngineParameters.HitWindow.LaneAutohitWindow, LaneAutohitExpireTime - CurrentTime);
+        }
+
+        protected bool SkipPreviousNotes(TNoteType current)
+        {
+            bool skipped = false;
+            var prevNote = current.PreviousNote;
+            while (prevNote is not null && !prevNote.WasFullyHitOrMissed())
+            {
+                if (AutohitNoteFromLane(prevNote))
+                {
+                    // Save this note from being counted as a skip if it satisfies the active lane
+                    continue;
+                }
+
+                skipped = true;
+                YargLogger.LogFormatTrace("Missed note (Index: {0}) ({1}) due to note skip at {2}", NoteIndex, prevNote.IsParent ? "Parent" : "Child", CurrentTime);
+                MissNote(prevNote);
+
+                if (TreatChordAsSeparate)
+                {
+                    foreach (var child in prevNote.ChildNotes)
+                    {
+                        YargLogger.LogFormatTrace("Missed note (Index: {0}) ({1}) due to note skip at {2}", NoteIndex, child.IsParent ? "Parent" : "Child", CurrentTime);
+                        MissNote(child);
+                    }
+                }
+
+                prevNote = prevNote.PreviousNote;
+            }
+
+            return skipped;
+        }
+
+        protected abstract void AddScore(TNoteType note);
+
+        protected void AddScore(int score)
+        {
+            int scoreMultiplier = score * EngineStats.ScoreMultiplier;
+
+            // scoreMultiplier includes combo+star power score
+            EngineStats.CommittedScore += scoreMultiplier;
+
+            if (EngineStats.IsStarPowerActive)
+            {
+                // Amount of points just from Star Power is half of the current multiplier (8x total -> 4x SP points)
+                var spScore = scoreMultiplier / 2;
+
+                EngineStats.StarPowerScore += spScore;
+                EngineStats.BandBonusScore += EngineStats.BandBonusMultiplier * spScore;
+
+                // Subtract score from the note that was just hit to get the multiplier points
+                EngineStats.MultiplierScore += spScore - score;
+            }
+            else
+            {
+                EngineStats.MultiplierScore += scoreMultiplier - score;
+                EngineStats.BandBonusScore += EngineStats.BandBonusMultiplier * scoreMultiplier;
+            }
+
+            UpdateStars();
+        }
+
+        protected virtual void UpdateSustains()
+        {
+            EngineStats.PendingScore = 0;
+
+            bool isStarPowerSustainActiveRightNow = false;
+            for (int i = 0; i < ActiveSustains.Count; i++)
+            {
+                ref var sustain = ref ActiveSustains[i];
+                var note = sustain.Note;
+
+                isStarPowerSustainActiveRightNow |= note.IsStarPower;
+
+                // If we're close enough to the end of the sustain, finish it
+                // Provides leniency for sustains with no gap (and just in general)
+                bool isBurst;
+
+                // Sustain is too short for a burst
+                if (SustainBurstThreshold > note.TickLength)
+                {
+                    isBurst = CurrentTick >= note.Tick;
+                }
+                else
+                {
+                    isBurst = CurrentTick >= note.TickEnd - SustainBurstThreshold;
+                }
+
+                bool isEndOfSustain = CurrentTick >= note.TickEnd;
+
+                uint sustainTick = isBurst || isEndOfSustain ? note.TickEnd : CurrentTick;
+
+                bool dropped = false;
+
+                if(!CanSustainHold(note))
+                {
+                    // Currently beind held by sustain drop leniency
+                    if (sustain.IsLeniencyHeld)
+                    {
+                        if (CurrentTime >= sustain.LeniencyDropTime + EngineParameters.SustainDropLeniency * EngineParameters.SongSpeed)
+                        {
+                            dropped = true;
+                            YargLogger.LogFormatTrace("Dropping sustain using leniency time at {0}", CurrentTime);
+                        }
+                    }
+                    else
+                    {
+                        sustain.IsLeniencyHeld = true;
+                        sustain.LeniencyDropTime = CurrentTime;
+                    }
+                }
+                else
+                {
+                    sustain.IsLeniencyHeld = false;
+                }
+
+                // If the sustain has not finished scoring, then we need to calculate the points
+                if (!sustain.HasFinishedScoring)
+                {
+                    // Sustain has reached burst threshold, so all points have been given
+                    if (isBurst || isEndOfSustain)
+                    {
+                        sustain.HasFinishedScoring = true;
+                    }
+
+                    // Sustain has ended, so commit the points
+                    if (dropped || isBurst || isEndOfSustain)
+                    {
+                        YargLogger.LogFormatTrace("Finished scoring sustain ({0}) at {1} (dropped: {2}, burst: {3})",
+                            sustain.Note.Tick, CurrentTime, dropped, isBurst);
+
+                        double finalScore = CalculateSustainPoints(ref sustain, sustainTick);
+                        var points = (int) Math.Ceiling(finalScore);
+
+                        AddScore(points);
+                        ulong timeAsUlong = UnsafeExtensions.DoubleToUInt64Bits(CurrentTime);
+                        ulong baseScoreAsUlong = UnsafeExtensions.DoubleToUInt64Bits(sustain.BaseScore);
+                        YargLogger.LogFormatTrace("Added {0} points for end of sustain at {1} (0x{2}). Base Score/Tick: {3} (0x{4}), {5}", points, CurrentTime, timeAsUlong.ToString("X"), sustain.BaseScore, baseScoreAsUlong.ToString("X"), sustain.BaseTick);
+
+                        // SustainPoints must include the multiplier, but NOT the star power multiplier
+                        int sustainPoints = points * EngineStats.ScoreMultiplier;
+                        if (EngineStats.IsStarPowerActive)
+                        {
+                            sustainPoints /= 2;
+                        }
+
+                        EngineStats.SustainScore += sustainPoints;
+                    }
+                    else
+                    {
+                        double score = CalculateSustainPoints(ref sustain, sustainTick);
+
+                        var sustainPoints = (int) Math.Ceiling(score);
+
+                        // It's ok to use multiplier here because PendingScore is only temporary to show the correct
+                        // score on the UI.
+                        EngineStats.PendingScore += sustainPoints * EngineStats.ScoreMultiplier;
+                    }
+                }
+
+                // Only remove the sustain if its dropped or has reached the final tick
+                if (dropped || isEndOfSustain)
+                {
+                    EndSustain(i, dropped, isEndOfSustain);
+                    i--;
+                }
+            }
+
+            UpdateStars();
+        }
+
+        protected virtual void StartSustain(TNoteType note)
+        {
+            var sustain = new ActiveSustain<TNoteType>(note);
+
+            ActiveSustains.Add(sustain);
+
+            YargLogger.LogFormatTrace("Started sustain at {0} (tick len: {1}, time len: {2})", CurrentTime, note.TickLength, note.TimeLength);
+
+            OnSustainStart?.Invoke(note);
+        }
+
+        protected virtual void EndSustain(int sustainIndex, bool dropped, bool isEndOfSustain)
+        {
+            var sustain = ActiveSustains[sustainIndex];
+            YargLogger.LogFormatTrace("Ended sustain ({0}) at {1} (dropped: {2}, end: {3})", sustain.Note.Tick, CurrentTime, dropped, isEndOfSustain);
+            ActiveSustains.RemoveAt(sustainIndex);
+
+            OnSustainEnd?.Invoke(sustain.Note, CurrentTime, sustain.HasFinishedScoring);
+        }
+
+        protected override void UpdateStarPower()
+        {
+            if (IsStarPowerSustainActive() && StarPowerWhammyTimer.IsActive)
+            {
+                var whammyTicks = CalculateStarPowerGain(CurrentTick, Math.Max(LastTick, FirstWhammyTick), ref WhammyTicksRemainder);
+
+                if (!BaseStats.IsStarPowerActive && BaseStats.StarPowerTickAmount < TicksToActivateStarPower && BaseStats.StarPowerTickAmount + whammyTicks >= TicksToActivateStarPower)
+                {
+                    OnStarPowerReady?.Invoke();
+                }
+
+                // Don't cap until drain has been calculated
+                BaseStats.StarPowerTickAmount += whammyTicks;
+
+                BaseStats.TotalStarPowerTicks += whammyTicks;
+                BaseStats.StarPowerWhammyTicks += whammyTicks;
+
+                if (BaseStats.IsStarPowerActive)
+                {
+                    UpdateStarPowerEnds();
+                }
+
+                BaseStats.TotalStarPowerBarsFilled = (double) BaseStats.TotalStarPowerTicks / TicksPerFullSpBar;
+                YargLogger.LogFormatTrace("Gained {0} whammy ticks this update (Total: {1}), {2} sustains active. SP right now: {3}", whammyTicks, EngineStats.StarPowerWhammyTicks, ActiveSustains.Count, BaseStats.StarPowerTickAmount);
+            }
+
+            PreviousStarPowerTickPosition = StarPowerTickPosition;
+            StarPowerTickPosition = SyncTrack.QuarterTickToMeasureTick(CurrentTick);
+
+            if (BaseStats.IsStarPowerActive)
+            {
+                var drain = CalculateStarPowerDrain(StarPowerTickPosition, PreviousStarPowerTickPosition);
+                if (BaseStats.StarPowerTickAmount <= drain)
+                {
+                    BaseStats.StarPowerTickAmount = 0;
+                }
+                else
+                {
+                    BaseStats.StarPowerTickAmount -= drain;
+                }
+
+                YargLogger.LogFormatTrace("Drained {0} ticks of SP this update. New SP tick amount: {1}. Current SP Tick: {2}, Last: {3}", drain, BaseStats.StarPowerTickAmount, StarPowerTickPosition, PreviousStarPowerTickPosition);
+
+                double spTimeDelta = CurrentTime - StarPowerActivationTime;
+                BaseStats.TimeInStarPower = spTimeDelta + BaseTimeInStarPower;
+                YargLogger.LogFormatTrace("Updated Star Power Time to {0} (delta: {1}, base: {2})", BaseStats.TimeInStarPower, spTimeDelta, BaseTimeInStarPower);
+            }
+
+            // Limit amount of ticks to a full bar.
+            if(BaseStats.StarPowerTickAmount > TicksPerFullSpBar)
+            {
+                BaseStats.StarPowerTickAmount = TicksPerFullSpBar;
+
+                if (BaseStats.IsStarPowerActive)
+                {
+                    UpdateStarPowerEnds();
+                    YargLogger.LogFormatTrace("Clamped SP. New end tick and time: {0}, {1}", StarPowerTickEndPosition, StarPowerEndTime);
+                }
+            }
+
+            if (BaseStats is { IsStarPowerActive: true, StarPowerTickAmount: 0 })
+            {
+                ReleaseStarPower();
+            }
+
+            if (IsStarPowerInputActive && CanStarPowerActivate)
+            {
+                ActivateStarPower();
+            }
+
+            if (StarPowerWhammyTimer.IsActive && StarPowerWhammyTimer.IsExpired(CurrentTime))
+            {
+                StarPowerWhammyTimer.Disable(CurrentTime);
+                YargLogger.LogFormatTrace("Disabling whammy timer at {0}", CurrentTime);
+            }
+        }
+
+        protected bool IsStarPowerSustainActive()
+        {
+            foreach (var sustain in ActiveSustains)
+            {
+                if (sustain.Note.IsStarPower)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        protected uint CalculateStarPowerGain(uint quarterTick, uint lastQuarterTick, ref double tickRemainder)
+        {
+
+            const int MAX_BEATS = STAR_POWER_MAX_MEASURES * 4;
+            const double GAIN_FACTOR = MAX_BEATS / (double) (MAX_BEATS - 2); // - 2 for leniency
+
+            double gain = (quarterTick - lastQuarterTick) * GAIN_FACTOR + tickRemainder;
+            double rounded = Math.Round(gain);
+            YargLogger.LogTrace($"Calculating whammy gain, quarterTick: {quarterTick}, lastQuarterTick: {lastQuarterTick}, gain: {gain}, rounded: {rounded}, remainderIn: {tickRemainder}");
+            tickRemainder = gain - rounded;
+
+            return (uint) rounded;
+        }
+
+        protected uint CalculateStarPowerDrain(uint measureTick, uint lastMeasureTick)
+        {
+            return measureTick - lastMeasureTick;
+        }
+
+        protected void UpdateStars()
+        {
+            // Update which star we're on
+            while (CurrentStarIndex < StarScoreThresholds.Length &&
+                EngineStats.TotalScore > StarScoreThresholds[CurrentStarIndex])
+            {
+                CurrentStarIndex++;
+            }
+
+            // Calculate current star progress
+            float progress = 0f;
+            if (CurrentStarIndex < StarScoreThresholds.Length)
+            {
+                int previousPoints = CurrentStarIndex > 0 ? StarScoreThresholds[CurrentStarIndex - 1] : 0;
+                int nextPoints = StarScoreThresholds[CurrentStarIndex];
+                progress = YargMath.InverseLerpF(previousPoints, nextPoints, EngineStats.TotalScore);
+            }
+
+            EngineStats.Stars = CurrentStarIndex + progress;
+        }
+
+        protected virtual void StripStarPower(TNoteType? note)
+        {
+            if (note is null || !note.IsStarPower)
+            {
+                return;
+            }
+
+            // Strip star power from the note and all its children
+            note.Flags &= ~NoteFlags.StarPower;
+            foreach (var childNote in note.ChildNotes)
+            {
+                childNote.Flags &= ~NoteFlags.StarPower;
+            }
+
+            // Look back until finding the start of the phrase
+            if (!note.IsStarPowerStart)
+            {
+                var prevNote = note.PreviousNote;
+                while (prevNote is not null && prevNote.IsStarPower)
+                {
+                    prevNote.Flags &= ~NoteFlags.StarPower;
+                    foreach (var childNote in prevNote.ChildNotes)
+                    {
+                        childNote.Flags &= ~NoteFlags.StarPower;
+                    }
+
+                    if (prevNote.IsStarPowerStart)
+                    {
+                        break;
+                    }
+
+                    prevNote = prevNote.PreviousNote;
+                }
+            }
+
+            // Look forward until finding the end of the phrase
+            if (!note.IsStarPowerEnd)
+            {
+                var nextNote = note.NextNote;
+                while (nextNote is not null && nextNote.IsStarPower)
+                {
+                    nextNote.Flags &= ~NoteFlags.StarPower;
+                    foreach (var childNote in nextNote.ChildNotes)
+                    {
+                        childNote.Flags &= ~NoteFlags.StarPower;
+                    }
+
+                    if (nextNote.IsStarPowerEnd)
+                    {
+                        break;
+                    }
+
+                    nextNote = nextNote.NextNote;
+                }
+            }
+
+            OnStarPowerPhraseMissed?.Invoke(note);
+        }
+
+        protected void AwardStarPower(TNoteType note)
+        {
+            GainStarPower(TicksPerQuarterSpBar);
+
+            OnStarPowerPhraseHit?.Invoke(note);
+        }
+
+        protected void StartSolo()
+        {
+            if (CurrentSoloIndex >= Solos.Count)
+            {
+                return;
+            }
+
+            IsSoloActive = true;
+            OnSoloStart?.Invoke(Solos[CurrentSoloIndex]);
+        }
+
+        protected virtual int SoloBonusPerNote => 100;
+
+        protected void EndSolo()
+        {
+            if (!IsSoloActive)
+            {
+                return;
+            }
+
+            var currentSolo = Solos[CurrentSoloIndex];
+
+            double soloPercentage = currentSolo.NotesHit / (double) currentSolo.NoteCount;
+
+            if (soloPercentage < 0.6)
+            {
+                currentSolo.SoloBonus = 0;
+            }
+            else
+            {
+                double multiplier = Math.Clamp((soloPercentage - 0.6) / 0.4, 0, 1);
+
+                // Old engine says this is 200 *, but I'm not sure that's right?? Isn't it 2x the note's worth, not 4x?
+                double points = SoloBonusPerNote * currentSolo.NotesHit * multiplier;
+
+                // Round down to nearest 50 (kinda just makes sense I think?)
+                points -= points % 50;
+
+                currentSolo.SoloBonus = (int) points;
+            }
+
+            EngineStats.SoloBonuses += currentSolo.SoloBonus;
+
+            IsSoloActive = false;
+
+            OnSoloEnd?.Invoke(Solos[CurrentSoloIndex]);
+            CurrentSoloIndex++;
+        }
+
+        protected void StartCoda()
+        {
+            if (CurrentCodaIndex >= Codas.Count)
+            {
+                return;
+            }
+
+            IsCodaActive = true;
+            CodaHasStarted = true;
+            OnCodaStart?.Invoke(Codas[CurrentCodaIndex]);
+        }
+
+        // The CodaEnd marker is set on a single note; this reports whether that note's
+        // chord (parent + children) carries it, so the coda ends on the whole final chord.
+        private static bool ChordHasCodaEnd(TNoteType note)
+        {
+            foreach (var chordNote in note.ParentOrSelf.AllNotes)
+            {
+                if (chordNote.IsCodaEnd)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        protected void EndCoda()
+        {
+            YargLogger.LogFormatTrace("Coda ended at time {0} with bonus score {1}", CurrentTime, Codas[CurrentCodaIndex].TotalCodaBonus);
+
+            IsCodaActive = false;
+            CodaHasStarted = false;
+            InhibitCoda = true;
+            OnCodaEnd?.Invoke(Codas[CurrentCodaIndex]);
+        }
+
+        protected override void RebaseSustains(uint baseTick)
+        {
+            EngineStats.PendingScore = 0;
+            for (int i = 0; i < ActiveSustains.Count; i++)
+            {
+                ref var sustain = ref ActiveSustains[i];
+                // Don't rebase sustains that haven't started yet
+                if (baseTick < sustain.BaseTick)
+                {
+                    YargLogger.AssertFormat(baseTick < sustain.Note.Tick,
+                        "Sustain base tick cannot go backwards! Attempted to go from {0} to {1}",
+                        sustain.BaseTick, baseTick);
+
+                    continue;
+                }
+
+                double sustainScore = CalculateSustainPoints(ref sustain, baseTick);
+
+                sustain.BaseTick = Math.Clamp(baseTick, sustain.Note.Tick, sustain.Note.TickEnd);
+                sustain.BaseScore = sustainScore;
+                EngineStats.PendingScore += (int) sustainScore;
+            }
+        }
+
+        protected void UpdateCountdown(double countdownLength, double endTime)
+        {
+            OnCountdownChange?.Invoke(countdownLength, endTime);
+        }
+
+        public sealed override (double FrontEnd, double BackEnd) CalculateHitWindow()
+        {
+            var maxWindow = EngineParameters.HitWindow.MaxWindow;
+
+            if (NoteIndex >= Notes.Count)
+            {
+                return (EngineParameters.HitWindow.GetFrontEnd(maxWindow),
+                    EngineParameters.HitWindow.GetBackEnd(maxWindow));
+            }
+
+            var noteDistance = GetAverageNoteDistance(Notes[NoteIndex]);
+            var hitWindow = EngineParameters.HitWindow.CalculateHitWindow(noteDistance);
+
+            return (EngineParameters.HitWindow.GetFrontEnd(hitWindow),
+                EngineParameters.HitWindow.GetBackEnd(hitWindow));
+        }
+
+        /// <summary>
+        /// Calculates both the base score and note score of the chart, which can be used to calculate star thresholds.
+        /// Base score is defined as the score if a player were to FC and hit all sustains fully.
+        /// Note score is base score, but without multiplier.
+        /// </summary>
+        /// <remarks>
+        /// Please be mindful that this virtual method is called in the constructor of
+        /// <see cref="BaseEngine{TNoteType,TEngineParams,TEngineStats}"/>.
+        /// <b>ONLY</b> use the <see cref="Notes"/> property to calculate this.
+        /// </remarks>
+        protected abstract (int baseScore, int noteScore) CalculateChartScores();
+
+        /// <summary>
+        /// Calculates the total bonus points that could be awarded from solos.
+        /// This must be called after <see cref="GetSoloSections"/>.
+        /// </summary>
+        /// <returns></returns>
+        protected int CalculateTotalSoloBonus()
+        {
+            int score = 0;
+            foreach (var solo in Solos)
+            {
+                score += solo.NoteCount * SoloBonusPerNote;
+            }
+            return score;
+        }
+
+        protected bool IsNoteInWindow(TNoteType note) => IsNoteInWindow(note, out _);
+
+        protected bool IsNoteInWindow(TNoteType note, double time) =>
+            IsNoteInWindow(note, out _, time);
+
+        protected bool IsNoteInWindow(TNoteType note, out bool missed) =>
+            IsNoteInWindow(note, out missed, CurrentTime);
+
+        protected bool IsNoteInWindow(TNoteType note, out bool missed, double time)
+        {
+            missed = false;
+
+            double hitWindow = EngineParameters.HitWindow.CalculateHitWindow(GetAverageNoteDistance(note));
+            double frontend = EngineParameters.HitWindow.GetFrontEnd(hitWindow);
+            double backend = EngineParameters.HitWindow.GetBackEnd(hitWindow);
+
+            // Time has not reached the front end of this note
+            if (time < note.Time + frontend)
+            {
+                return false;
+            }
+
+            // Time has surpassed the back end of this note
+            if (time > note.Time + backend)
+            {
+                missed = true;
+                return false;
+            }
+
+            return true;
+        }
+
+        protected double CalculateSustainPoints(ref ActiveSustain<TNoteType> sustain, uint tick)
+        {
+            uint scoreTick = Math.Clamp(tick, sustain.Note.Tick, sustain.Note.TickEnd);
+
+            sustain.Note.SustainTicksHeld = scoreTick - sustain.Note.Tick;
+
+            // Sustain points are awarded at a constant rate regardless of tempo
+            // double deltaScore = CalculateBeatProgress(scoreTick, sustain.BaseTick, POINTS_PER_BEAT);
+            double deltaScore = (scoreTick - sustain.BaseTick) / TicksPerSustainPoint;
+            return sustain.BaseScore + deltaScore;
+        }
+
+        protected void AdvanceToNextNote(TNoteType note)
+        {
+            NoteIndex++;
+            ReRunHitLogic = true;
+
+            if (!LanesExist)
+            {
+                return;
+            }
+
+            if (note.IsLaneEnd)
+            {
+                // Update the result of LanesExist
+                CurrentLaneIndex++;
+            }
+        }
+
+        public double GetAverageNoteDistance(TNoteType note)
+        {
+            double previousToCurrent;
+            double currentToNext = EngineParameters.HitWindow.MaxWindow / 2;
+
+            if (note.NextNote is not null)
+            {
+                currentToNext = (note.NextNote.Time - note.Time) / 2;
+            }
+
+            if (note.PreviousNote is not null)
+            {
+                previousToCurrent = (note.Time - note.PreviousNote.Time) / 2;
+            }
+            else
+            {
+                previousToCurrent = currentToNext;
+            }
+
+            return previousToCurrent + currentToNext;
+        }
+
+        private List<SoloSection> GetSoloSections()
+        {
+            var soloSections = new List<SoloSection>();
+
+            if (Notes.Count > 0 && Notes[0] is { IsSolo: true, IsSoloEnd: false })
+            {
+                Notes[0].ActivateFlag(NoteFlags.SoloStart);
+            }
+
+            if (Notes.Count > 0 && Notes[^1].IsSolo)
+            {
+                Notes[^1].ActivateFlag(NoteFlags.SoloEnd);
+            }
+
+            for (int i = 0; i < Notes.Count; i++)
+            {
+                var curr = Notes[i];
+                if (!curr.IsSoloStart)
+                {
+                    continue;
+                }
+
+                int soloNoteCount = 0;
+                uint start = curr.Tick;
+                while (true)
+                {
+                    soloNoteCount += GetNumberOfNotes(curr);
+                    if (curr.IsSoloEnd || i + 1 == Notes.Count)
+                    {
+                        break;
+                    }
+                    curr = Notes[++i];
+                }
+                soloSections.Add(new SoloSection(start, curr.Tick, soloNoteCount));
+            }
+            return soloSections;
+        }
+
+        private void GetTotalLanes()
+        {
+            TotalLanes = 0;
+
+            if (Notes.Count == 0)
+            {
+                return;
+            }
+
+            // Modify lane start and end points if selected practice sections cut off the charted boundaries
+            if (Notes[0].IsLane)
+            {
+                Notes[0].ActivateFlag(NoteFlags.LaneStart);
+            }
+
+            if (Notes[^1].IsLane)
+            {
+                Notes[^1].ActivateFlag(NoteFlags.LaneEnd);
+            }
+
+            for (int i = 0; i < Chart.Phrases.Count; i++)
+            {
+                var thisPhrase = Chart.Phrases[i];
+
+                if (thisPhrase.TickEnd < Notes[0].Tick)
+                {
+                    continue;
+                }
+
+                if (thisPhrase.Tick > Notes[^1].TickEnd)
+                {
+                    break;
+                }
+
+                switch (thisPhrase.Type)
+                {
+                    case PhraseType.TremoloLane:
+                    case PhraseType.TrillLane:
+                        TotalLanes++;
+                        break;
+                }
+            }
+        }
+
+        protected void GetWaitCountdowns(List<TNoteType> notes)
+        {
+            WaitCountdowns = new List<WaitCountdown>();
+
+            // We need to know when the coda starts so we can suppress the waitcountdown during the coda
+            // TODO: This will need to be reworked to support multiple coda sections in a single chart
+            double codaTime = double.MaxValue;
+
+            if (Codas.Count > 0)
+            {
+                codaTime = Codas[0].StartTime;
+            }
+
+            for (int i = 0; i < notes.Count; i++)
+            {
+                // Compare the note at the current index against the previous note
+                double noteOneTimeEnd = 0;
+                uint noteOneTickEnd = 0;
+
+                if (i > 0) {
+                    Note<TNoteType> noteOne = notes[i-1];
+                    noteOneTimeEnd = noteOne.TimeEnd;
+                    noteOneTickEnd = noteOne.TickEnd;
+                }
+
+                Note<TNoteType> noteTwo = notes[i];
+
+                if (noteTwo.Time - noteOneTimeEnd >= WaitCountdown.MIN_SECONDS)
+                {
+                    // Distance between these two notes is over the threshold
+
+                    // If this countdown would start after the coda event, don't create it
+                    if (noteOneTimeEnd >= codaTime)
+                    {
+                        continue;
+                    }
+
+                    WaitCountdown newCountdown;
+
+                    // If the countdown would last into a coda, cut it off at the coda start time
+                    if (noteTwo.Time > codaTime)
+                    {
+                        newCountdown = new WaitCountdown(noteOneTimeEnd, codaTime - noteOneTimeEnd, noteOneTickEnd,
+                            SyncTrack.TimeToTick(codaTime) - noteOneTickEnd);
+                    }
+                    else
+                    {
+                        newCountdown = new WaitCountdown(noteOneTimeEnd, noteTwo.Time - noteOneTimeEnd, noteOneTickEnd,
+                            noteTwo.Tick - noteOneTickEnd);
+                    }
+
+                    WaitCountdowns.Add(newCountdown);
+                    YargLogger.LogFormatTrace("Created a WaitCountdown at time {0} of {1} seconds in length", newCountdown.Time, newCountdown.TimeLength);
+                }
+            }
+        }
+
+        // TODO: Make this abstract and put a GetCodaSections implementation in all engines
+        protected virtual List<CodaSection> GetCodaSections()
+        {
+            var codaSections = new List<CodaSection>();
+
+            foreach (var phrase in Chart.Phrases)
+            {
+                if (phrase.Type != PhraseType.BigRockEnding)
+                {
+                    continue;
+                }
+
+                codaSections.Add(new CodaSection(5, phrase.Time, phrase.TimeEnd));
+            }
+
+            return codaSections;
+        }
+
+        protected static bool MaskIsMultiFret(int mask)
+        {
+            return (mask & (mask - 1)) != 0;
+        }
+
+        protected static int GetMostSignificantBit(int mask)
+        {
+            // Gets the most significant bit of the mask
+            var msbIndex = 0;
+            while (mask != 0)
+            {
+                mask >>= 1;
+                msbIndex++;
+            }
+
+            return msbIndex;
+        }
+
+        protected abstract bool ProximalLaneForgivesInput(int inputNote, TNoteType laneNote);
+
+        protected static bool LaneIncludesInputNote(int inputNote, TNoteType laneNote)
+        {
+            var inputMask = 1 << inputNote;
+            var (requiredLaneNote, otherNoteInTrill) = GetLaneNotes(laneNote);
+
+            if ((inputMask & requiredLaneNote) != 0)
+            {
+                return true;
+            }
+
+            if (otherNoteInTrill != -1 && ((inputMask & otherNoteInTrill) != 0))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        protected static (int requiredLaneNote, int otherNoteInTrill) GetLaneNotes(TNoteType laneNote)
+        {
+            var requiredLaneNote = laneNote.LaneNote;
+
+            int otherNoteInTrill;
+
+            if (laneNote.IsTremolo)
+            {
+                otherNoteInTrill = -1;
+            }
+            else if (laneNote.IsLaneEnd)
+            {
+                otherNoteInTrill = laneNote.PreviousNote.LaneNote;
+            }
+            else
+            {
+                otherNoteInTrill = laneNote.NextNote.LaneNote;
+            }
+
+            return (requiredLaneNote, otherNoteInTrill);
+        }
+    }
+}

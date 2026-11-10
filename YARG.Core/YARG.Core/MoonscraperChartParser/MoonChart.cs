@@ -1,0 +1,117 @@
+﻿// Copyright (c) 2016-2020 Alexander Ong
+// See LICENSE in project root for license information.
+
+using System.Collections;
+using System.Collections.Generic;
+
+namespace MoonscraperChartEditor.Song
+{
+    internal class MoonChart
+    {
+        /// <summary>
+        /// The game mode the chart is designed for
+        /// </summary>
+        public GameMode gameMode { get; private set; }
+
+        /// <summary>
+        /// Read only list of notes.
+        /// </summary>
+        public List<MoonNote> notes { get; private set; } = new();
+        /// <summary>
+        /// Read only list of special phrases.
+        /// </summary>
+        public List<MoonPhrase> specialPhrases { get; private set; } = new();
+        /// <summary>
+        /// Read only list of local events.
+        /// </summary>
+        public List<MoonText> events { get; private set; } = new();
+
+        /// <summary>
+        /// Read only list of animation events.
+        /// </summary>
+        public List<MoonAnimation> animations { get; private set; } = new();
+
+        public bool IsEmpty => notes.Count == 0 && specialPhrases.Count == 0 && events.Count == 0;
+
+        /// <summary>
+        /// Creates a new chart object.
+        /// </summary>
+        public MoonChart(GameMode _gameMode)
+        {
+            gameMode = _gameMode;
+        }
+
+        public MoonChart(MoonSong.MoonInstrument Instrument)
+            : this(MoonSong.InstrumentToChartGameMode(Instrument))
+        {
+        }
+
+        public void Clear()
+        {
+            notes.Clear();
+            events.Clear();
+            specialPhrases.Clear();
+        }
+
+        public void Add(MoonNote note)
+        {
+            MoonObjectHelper.AddToEnd(note, notes);
+        }
+
+        public void Add(MoonPhrase phrase)
+        {
+            MoonObjectHelper.AddToEnd(phrase, specialPhrases);
+        }
+
+        public void Add(MoonText ev)
+        {
+            MoonObjectHelper.AddToEnd(ev, events);
+        }
+
+        public int Insert(MoonNote note)
+        {
+            return MoonObjectHelper.Insert(note, notes);
+        }
+
+        public int Insert(MoonPhrase phrase)
+        {
+            return MoonObjectHelper.Insert(phrase, specialPhrases);
+        }
+
+        public int Insert(MoonText ev)
+        {
+            return MoonObjectHelper.Insert(ev, events);
+        }
+
+        public int Add(MoonAnimation ev)
+        {
+            return MoonObjectHelper.Insert(ev, animations);
+        }
+
+        public bool Remove(MoonNote note)
+        {
+            return MoonObjectHelper.Remove(note, notes);
+        }
+
+        public bool Remove(MoonPhrase phrase)
+        {
+            return MoonObjectHelper.Remove(phrase, specialPhrases);
+        }
+
+        public bool Remove(MoonText ev)
+        {
+            return MoonObjectHelper.Remove(ev, events);
+        }
+
+        public enum GameMode
+        {
+            Guitar,
+            Drums,
+            GHLGuitar,
+            ProGuitar,
+            ProKeys,
+            Vocals,
+            EliteDrums,
+        }
+    }
+}

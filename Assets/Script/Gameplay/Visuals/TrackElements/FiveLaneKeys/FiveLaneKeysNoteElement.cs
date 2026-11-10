@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing.Text;
+using System.Linq;
 using UnityEngine;
 using YARG.Assets.Script.Gameplay.Player;
 using YARG.Core.Chart;
@@ -22,6 +23,7 @@ namespace YARG.Gameplay.Visuals
             Normal = 0,
             Open = 1,
             Wildcard = 2,
+            Lift = 3,
             Count
         }
 
@@ -47,6 +49,93 @@ namespace YARG.Gameplay.Visuals
             AssignNoteGroup(models, starPowerModels, (int) NoteType.Normal, ThemeNoteType.Normal);
             AssignNoteGroup(models, starPowerModels, (int) NoteType.Open,     ThemeNoteType.Open);
             AssignNoteGroup(models, starPowerModels, (int) NoteType.Wildcard, ThemeNoteType.Wildcard);
+
+            if (models.ContainsKey(ThemeNoteType.Lift))
+            {
+                AssignNoteGroup(models, starPowerModels, (int) NoteType.Lift, ThemeNoteType.Lift);
+            }
+            else
+            {
+                // No theme ships a lift model, so reshape the normal note into a triangle
+                AssignNoteGroup(models, starPowerModels, (int) NoteType.Lift, ThemeNoteType.Normal);
+                MakeTriangle(NoteGroups[(int) NoteType.Lift]);
+                if (StarPowerNoteGroups[(int) NoteType.Lift] != NoteGroups[(int) NoteType.Lift])
+                {
+                    MakeTriangle(StarPowerNoteGroups[(int) NoteType.Lift]);
+                }
+            }
+        }
+
+        private static void MakeTriangle(NoteGroup group)
+        {
+            // Keep only the note's main colored mesh, so the triangle takes the lane color
+            var colored = group.GetComponentInChildren<ThemeNote>().ColoredMaterials.First();
+            foreach (var renderer in group.GetComponentsInChildren<MeshRenderer>())
+            {
+                renderer.enabled = renderer == colored.Mesh;
+            }
+
+            // Work in the note group's space so rotated model imports still give a flat triangle
+            var filter = colored.Mesh.GetComponent<MeshFilter>();
+            var toGroup = group.transform.worldToLocalMatrix * filter.transform.localToWorldMatrix;
+            var meshBounds = filter.sharedMesh.bounds;
+            var bounds = new Bounds(toGroup.MultiplyPoint3x4(meshBounds.center), Vector3.zero);
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = meshBounds.center + Vector3.Scale(meshBounds.extents,
+                    new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                bounds.Encapsulate(toGroup.MultiplyPoint3x4(corner));
+            }
+
+            filter.sharedMesh = CreateTriangleMesh(bounds, toGroup.inverse, filter.sharedMesh.subMeshCount,
+                colored.MaterialIndex);
+        }
+
+        // A flat triangular prism in the note's footprint, pointing down the track
+        private static Mesh CreateTriangleMesh(Bounds bounds, Matrix4x4 toMesh, int subMeshCount, int subMesh)
+        {
+            // Smaller and flatter than the note it replaces, so it reads as a marker rather than a block
+            var c = bounds.center;
+            float halfWidth = bounds.extents.x * 0.6f;
+            float halfDepth = halfWidth * 0.5f;
+            float halfHeight = bounds.extents.y * 0.35f;
+            Vector3[] top =
+            {
+                new(c.x - halfWidth, c.y + halfHeight, c.z - halfDepth),
+                new(c.x,             c.y + halfHeight, c.z + halfDepth),
+                new(c.x + halfWidth, c.y + halfHeight, c.z - halfDepth),
+            };
+            var bottom = top.Select(v => new Vector3(v.x, c.y - halfHeight, v.z)).ToArray();
+
+            var vertices = new List<Vector3>();
+            void Tri(Vector3 a, Vector3 b, Vector3 d)
+            {
+                vertices.Add(a);
+                vertices.Add(b);
+                vertices.Add(d);
+            }
+
+            // Clockwise winding is front-facing in Unity
+            Tri(top[0], top[1], top[2]);
+            Tri(bottom[0], bottom[2], bottom[1]);
+            for (int i = 0; i < 3; i++)
+            {
+                int j = (i + 1) % 3;
+                Tri(top[i], bottom[i], bottom[j]);
+                Tri(top[i], bottom[j], top[j]);
+            }
+
+            var mesh = new Mesh { name = "Lift Note" };
+            mesh.SetVertices(vertices.Select(v => toMesh.MultiplyPoint3x4(v)).ToList());
+            mesh.SetUVs(0, new Vector2[vertices.Count]);
+            mesh.subMeshCount = subMeshCount;
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                mesh.SetTriangles(i == subMesh ? Enumerable.Range(0, vertices.Count).ToArray() : new int[0], i);
+            }
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         protected override void InitializeElement()
@@ -68,9 +157,14 @@ namespace YARG.Gameplay.Visuals
                 if (Player.UsingOpenLane) {
                     gameObject.transform.localScale = OPEN_LANE_SCALE;
                 }
+                else if (Player.LaneCount == 4)
+                {
+                    // Wider lanes on Festival's four-lane difficulties: widen only, so a note's look matches its timing
+                    gameObject.transform.localScale = Vector3.Scale(gameObject.transform.localScale, new Vector3(5f / 4f, 1f, 1f));
+                }
 
                 // Get which note model to use
-                NoteGroup = NoteRef.Type switch
+                NoteGroup = NoteRef.IsLift ? noteGroups[(int) NoteType.Lift] : NoteRef.Type switch
                 {
                     GuitarNoteType.Strum or
                     GuitarNoteType.Hopo  or

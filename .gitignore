@@ -126,3 +126,7 @@ reload_lock~.meta
 
 # Unity crash dumps
 mono_crash.mem.*.blob
+
+# Key the game sends to the song database server (secret; set up per machine)
+/Assets/Resources/OnlineApiKey.txt
+/Assets/Resources/OnlineApiKey.txt.meta

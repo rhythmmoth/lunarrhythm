@@ -43,6 +43,16 @@ namespace YARG.Helpers
         public static string SongCachePath { get; private set; }
 
         /// <summary>
+        /// The only song folder: "songs" next to the executable (project root in the editor).
+        /// </summary>
+        public static string SongsPath { get; private set; }
+
+        /// <summary>
+        /// Local copies of the online song database's songs; rebuilt by <see cref="YARG.Core.Song.OnlineSongs"/>.
+        /// </summary>
+        public static string OnlineSongsPath { get; private set; }
+
+        /// <summary>
         /// The file to write the bad songs list to.
         /// </summary>
         public static string BadSongsPath { get; private set; }
@@ -122,6 +132,8 @@ namespace YARG.Helpers
             StreamingAssetsPath = SanitizePath(Application.streamingAssetsPath);
 
             // Get song scanning paths
+            SongsPath = Path.Combine(ExecutablePath, "songs");
+            OnlineSongsPath = Path.Combine(PersistentDataPath, "online_songs");
             SongCachePath = Path.Combine(PersistentDataPath, "songcache.bin");
             BadSongsPath = Path.Combine(PersistentDataPath, "badsongs.txt");
 

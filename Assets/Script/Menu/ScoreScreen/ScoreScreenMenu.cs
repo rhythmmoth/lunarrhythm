@@ -157,7 +157,8 @@ namespace YARG.Menu.ScoreScreen
 
             SetNavigationScheme();
 
-            _sourceIcon.sprite = SongSources.SourceToIcon(song.Source);
+            // No source icons in the pad game; hide the icon's background square with it
+            _sourceIcon.transform.parent.gameObject.SetActive(false);
 
             _cancellationToken = new CancellationTokenSource();
             _albumCover.LoadAlbumCover(song, _cancellationToken.Token, 0.2f);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using ManagedBass;
@@ -477,21 +477,35 @@ namespace YARG.Audio.BASS
             foreach (var sample in AudioHelpers.VoxSamples)
             {
                 string voxBase = Path.Combine(voxFolder, sample.File);
+                var voxPaths = new List<string>();
                 foreach (string format in SupportedFormats)
                 {
                     string voxPath = voxBase + format;
                     if (File.Exists(voxPath))
                     {
-                        var voxSample = sample.Kind;
-                        var vox = BassVoxSampleChannel.Create(voxSample, voxPath,
-                            CreateOutputChannel(SettingsManager.Settings?.OutputChannelVox.Value ?? 0));
-
-                        if (vox != null)
-                        {
-                            VoxSamples[(int) voxSample] = vox;
-                        }
-
+                        voxPaths.Add(voxPath);
                         break;
+                    }
+                }
+
+                // Extra takes named like FullCombo_<anything>.wav play at random alongside the original
+                foreach (string voxPath in Directory.EnumerateFiles(voxFolder, sample.File + "_*"))
+                {
+                    if (Array.IndexOf(FORMATS, Path.GetExtension(voxPath).ToLowerInvariant()) >= 0)
+                    {
+                        voxPaths.Add(voxPath);
+                    }
+                }
+
+                if (voxPaths.Count > 0)
+                {
+                    var voxSample = sample.Kind;
+                    var vox = BassVoxSampleChannel.Create(voxSample, voxPaths,
+                        CreateOutputChannel(SettingsManager.Settings?.OutputChannelVox.Value ?? 0));
+
+                    if (vox != null)
+                    {
+                        VoxSamples[(int) voxSample] = vox;
                     }
                 }
             }

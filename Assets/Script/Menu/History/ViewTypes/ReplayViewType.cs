@@ -30,7 +30,6 @@ namespace YARG.Menu.History
         private readonly string _artistName;
 
         private readonly GameInfo _gameInfo;
-        private readonly Sprite? _sprite;
 
         public ReplayViewType(GameRecord record, List<PlayerScoreRecord>? playerScoreRecords)
         {
@@ -38,7 +37,6 @@ namespace YARG.Menu.History
             if (SongContainer.SongsByHash.TryGetValue(HashWrapper.Create(record.SongChecksum), out var songs))
             {
                 _songEntry = songs[0];
-                _sprite = SongSources.SourceToIcon(_songEntry.Source);
             }
             _gameInfo.BandScore = _record.BandScore;
             _gameInfo.BandStars = _record.BandStars;
@@ -53,7 +51,6 @@ namespace YARG.Menu.History
             if (SongContainer.SongsByHash.TryGetValue(entry.SongChecksum, out var songs))
             {
                 _songEntry = songs[0];
-                _sprite = SongSources.SourceToIcon(_songEntry.Source);
             }
             _gameInfo.BandScore = _entry.BandScore;
             _gameInfo.BandStars = _entry.BandStars;
@@ -74,8 +71,8 @@ namespace YARG.Menu.History
 
         public override Sprite? GetIcon()
         {
-            // TODO: Show "song missing" icon instead when _songEntry is null
-            return _sprite;
+            // No source icons in the pad game
+            return null;
         }
 
         // AKA, the Play Replay Button

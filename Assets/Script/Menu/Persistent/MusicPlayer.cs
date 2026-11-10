@@ -16,6 +16,8 @@ namespace YARG.Menu.Persistent
     {
         private static SongEntry _nowPlaying = null;
         public static SongEntry NowPlaying => _nowPlaying;
+        /// <summary>Fires on the main thread when <see cref="NowPlaying"/> starts a new song or stops.</summary>
+        public static event System.Action NowPlayingChanged;
 
         private object _lock = new();
         private StemMixer _mixer = null;
@@ -108,9 +110,11 @@ namespace YARG.Menu.Persistent
                     _artistText.text = _nowPlaying.Artist;
                     _playPauseButton.sprite = _pauseSprite;
                 }
+                NowPlayingChanged?.Invoke();
                 return;
             }
             _nowPlaying = null;
+            NowPlayingChanged?.Invoke();
         }
 
         public void UpdateVolume(double volume)

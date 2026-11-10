@@ -94,7 +94,7 @@ namespace YARG.Menu.MusicLibrary
                 _categoryNameContainer.SetActive(false);
             }
 
-            _selectedSourceIconBackground.enabled = selected & viewType is SongViewType;
+            _selectedSourceIconBackground.enabled = false; // no source icons in the pad game
 
             // Set score and instrument display
             var scoreInfo = viewType.GetScoreInfo();

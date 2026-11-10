@@ -18,7 +18,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &787824967587876286
 RectTransform:
   m_ObjectHideFlags: 0
@@ -151,7 +151,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &5558976941030374368
 RectTransform:
   m_ObjectHideFlags: 0
@@ -723,11 +723,11 @@ RectTransform:
   - {fileID: 5459150074758771765}
   m_Father: {fileID: 8056600719258356201}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 138, y: -401}
+  m_AnchorMin: {x: 0.5, y: 0}
+  m_AnchorMax: {x: 0.5, y: 1}
+  m_AnchoredPosition: {x: 0, y: -370}
   m_SizeDelta: {x: 600, y: 0}
-  m_Pivot: {x: 0, y: 1}
+  m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &8056600718964393338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -741,15 +741,15 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   m_Padding:
-    m_Left: 25
+    m_Left: 0
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 1
   m_Spacing: 25
-  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 1
+  m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
@@ -918,6 +918,8 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   _versionText: {fileID: 8056600718899557301}
+  _panelSprite: {fileID: 21300000, guid: 933e6d862ec2fcb488e809e0c14e48ec, type: 3}
+  _menuOptions: {fileID: 8056600718964393342}
 --- !u!1 &8056600719397396521
 GameObject:
   m_ObjectHideFlags: 0
@@ -955,7 +957,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: -50, y: 134}
+  m_AnchoredPosition: {x: -60, y: 97}
   m_SizeDelta: {x: 0, y: 48}
   m_Pivot: {x: 0.99999946, y: -0.000000603497}
 --- !u!114 &8056600719397396533
@@ -1031,11 +1033,11 @@ RectTransform:
   - {fileID: 8056600718899557300}
   m_Father: {fileID: 8056600719258356201}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 118, y: -92}
+  m_AnchorMin: {x: 0.5, y: 1}
+  m_AnchorMax: {x: 0.5, y: 1}
+  m_AnchoredPosition: {x: 0, y: -80}
   m_SizeDelta: {x: 488, y: 218}
-  m_Pivot: {x: 0, y: 1}
+  m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &8056600719513037914
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1092,7 +1094,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &8056600720790925671
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1465,7 +1467,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 9221704359829114418}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!1001 &704024228604967325
 PrefabInstance:
@@ -1769,7 +1771,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 8150562796891013165}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!224 &8150562797150811383 stripped
 RectTransform:
@@ -1784,6 +1786,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8056600718964393342}
     m_Modifications:
+    - target: {fileID: 8708184733134376309, guid: cccf866ef69cf784b989cd792919610b, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1743221685057067538, guid: cccf866ef69cf784b989cd792919610b, type: 3}
       propertyPath: badgeText
       value: New
@@ -2095,7 +2101,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 8253211001525452161}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!224 &8253211001315461467 stripped
 RectTransform:
@@ -2121,6 +2127,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8056600718964393342}
     m_Modifications:
+    - target: {fileID: 8708184733134376309, guid: cccf866ef69cf784b989cd792919610b, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1743221685057067538, guid: cccf866ef69cf784b989cd792919610b, type: 3}
       propertyPath: badgeText
       value: Beta
@@ -2473,7 +2483,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 6264719373618868922}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!114 &6264719373618868922 stripped
 MonoBehaviour:
@@ -3002,7 +3012,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 1061753958907709468}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!1001 &8748110916056652948
 PrefabInstance:
@@ -3247,7 +3257,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _texts:
   - {fileID: 125581163891156260}
-  _selectedColor: {r: 1, g: 0.83137256, b: 0.22745098, a: 1}
+  _selectedColor: {r: 0.9, g: 0.83, b: 1, a: 1}
   _preserveAlpha: 1
 --- !u!224 &125581163748282878 stripped
 RectTransform:

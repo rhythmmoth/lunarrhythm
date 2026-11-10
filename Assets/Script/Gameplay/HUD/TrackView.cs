@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using YARG.Core.Engine;
 using YARG.Gameplay.Visuals;
@@ -45,6 +46,17 @@ namespace YARG.Gameplay.HUD
         private readonly Vector3 _hiddenPosition = new(-10000f, -10000f, 0f);
         private float ExtraTopElementOffset => 8f * Screen.height / 1000f;
 
+        // Perfect/Good popup, just left of the bottom of the highway
+        private const float JUDGEMENT_DEPTH = 0.05f;
+        private const float JUDGEMENT_HOLD = 0.15f;
+        private const float JUDGEMENT_FADE = 0.25f;
+        private static readonly Color PERFECT_COLOR = new(1f, 0.84f, 0.25f);
+        private static readonly Color GOOD_COLOR = new(0.6f, 0.85f, 1f);
+
+        private TextMeshProUGUI _judgement;
+        private float _judgementShownAt = float.NegativeInfinity;
+        private int _highwayIndex;
+
         public void Initialize(HighwayCameraRendering highwayRenderer)
         {
             _highwayRenderer = highwayRenderer;
@@ -59,6 +71,53 @@ namespace YARG.Gameplay.HUD
             _highwayRenderer.SetScaleMultiplier(_highwayDraggable.CurrentScale);
 
             _centerElementContainer.position = _hiddenPosition;
+
+            // Built from the notification text so it uses the HUD's font
+            _judgement = Instantiate(_textNotifications.GetComponentInChildren<TextMeshProUGUI>(true),
+                _centerElementContainer.parent);
+            _judgement.name = "Hit Judgement";
+            _judgement.gameObject.SetActive(true);
+            _judgement.enableAutoSizing = false;
+            _judgement.fontSize = 30f;
+            _judgement.alignment = TextAlignmentOptions.Right;
+            _judgement.enableWordWrapping = false;
+            _judgement.raycastTarget = false;
+            _judgement.rectTransform.pivot = new Vector2(1f, 0.5f);
+            _judgement.text = string.Empty;
+        }
+
+        public void ShowJudgement(bool perfect)
+        {
+            if (_judgement == null)
+            {
+                return;
+            }
+
+            _judgement.text = perfect ? "PERFECT" : "GOOD";
+            _judgement.color = perfect ? PERFECT_COLOR : GOOD_COLOR;
+            _judgementShownAt = Time.unscaledTime;
+        }
+
+        private void Update()
+        {
+            if (_judgement == null || _highwayRenderer == null)
+            {
+                return;
+            }
+
+            float age = Time.unscaledTime - _judgementShownAt;
+            float alpha = age < JUDGEMENT_HOLD ? 1f : Mathf.Clamp01(1f - (age - JUDGEMENT_HOLD) / JUDGEMENT_FADE);
+            _judgement.alpha = alpha;
+            if (alpha <= 0f)
+            {
+                return;
+            }
+
+            // Left edge of the highway near the strikeline, nudged a little further left
+            var edge = _highwayRenderer.GetTrackPositionScreenSpace(_highwayIndex, 0f, JUDGEMENT_DEPTH);
+            _judgement.transform.position = edge.HasValue
+                ? (Vector3) (edge.Value + new Vector2(-12f * Screen.height / 1000f, 0f))
+                : _hiddenPosition;
         }
 
         public void UpdateHUDPosition(int highwayIndex, int highwayCount)
@@ -74,6 +133,7 @@ namespace YARG.Gameplay.HUD
                 _defaultsInitialized = true;
             }
 
+            _highwayIndex = highwayIndex;
             UpdateHudElements(highwayIndex);
         }
 

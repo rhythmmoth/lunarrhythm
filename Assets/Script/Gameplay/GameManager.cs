@@ -632,6 +632,7 @@ namespace YARG.Gameplay
             };
 
             RecordScores(replayInfo);
+            SubmitToLeaderboard();
 
             // Go to the score screen
             GlobalVariables.Instance.LoadScene(SceneIndex.Score);
@@ -751,6 +752,75 @@ namespace YARG.Gameplay
                 PlayedWithReplay = GlobalVariables.State.PlayingWithReplay,
                 HasBots = HasBots,
             }, playerEntries);
+        }
+
+        private void SubmitToLeaderboard()
+        {
+            // Boards are per player, so only solo runs of online songs count
+            var humans = _players.Where(p => !p.Player.Profile.IsBot).ToList();
+            if (humans.Count != 1 || !Leaderboards.SignedIn || !OnlineSongs.IsOnlineFolder(Song.ActualLocation))
+            {
+                return;
+            }
+
+            var player = humans[0];
+            var profile = player.Player.Profile;
+            string instrument = Leaderboards.InstrumentName(profile.CurrentInstrument);
+            string difficulty = Leaderboards.DifficultyName(profile.CurrentDifficulty);
+            string chart = Leaderboards.ChartHash(Song.ActualLocation);
+            if (player.Player.IsReplay || !ScoreContainer.IsSoloScoreValid(SongSpeed, player.Player) ||
+                instrument == null || difficulty == null || chart == null)
+            {
+                return;
+            }
+
+            SubmitToLeaderboard(new Leaderboards.Run
+            {
+                Shortname = System.IO.Path.GetFileName(Song.ActualLocation.TrimEnd('/', '\\')),
+                Instrument = instrument,
+                Difficulty = difficulty,
+                Chart = chart,
+                Score = player.Score,
+                Stars = Mathf.Clamp((int) player.Stars, 0, 7),
+                NotesHit = player.BaseStats.NotesHit,
+                NotesMissed = player.BaseStats.NotesMissed,
+                Fc = player.IsFc,
+            }).Forget();
+        }
+
+        // Static: the game scene is gone by the time the server answers
+        private static async UniTaskVoid SubmitToLeaderboard(Leaderboards.Run run)
+        {
+            var result = await Leaderboards.Submit(run);
+            YARG.Menu.MusicLibrary.LeaderboardCard.Invalidate(); // so the new score shows in the library
+            if (result == null)
+            {
+                ToastManager.ToastWarning("Leaderboard unreachable. Your score will be sent next time.");
+            }
+            else if (result.Accepted)
+            {
+                if (result.PersonalBest)
+                {
+                    ToastManager.ToastSuccess($"New personal best! #{result.Rank} on the leaderboard");
+                }
+                else
+                {
+                    ToastManager.ToastInformation($"Your best is still {result.Best:N0} (#{result.Rank})");
+                }
+            }
+            else
+            {
+                string reason = result.Reason switch
+                {
+                    "chart_outdated"   => "this chart was updated. Restart the game to get the new one.",
+                    "unranked_song"    => "this song doesn't have a leaderboard yet.",
+                    "impossible_score" or "wrong_note_count" => "the score couldn't be verified.",
+                    "banned"           => "your account is banned from the leaderboards.",
+                    "signed_out"       => "your sign-in expired. Sign in again in Settings.",
+                    _                  => result.Reason,
+                };
+                ToastManager.ToastWarning("Not ranked: " + reason);
+            }
         }
 
         public void ForceQuitSong()

@@ -55,13 +55,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2b33e6e7de204a9439ec85cdb1b7b298
-    m_Address: SettingPreviews/ExperimentalPreviewUI
+  - m_GUID: c59fc90e5321ae644b1baecfad526036
+    m_Address: MenuBackground
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 37057a242aeaf274982e4ac288d2c898
-    m_Address: SettingTab/SongManagerDirectory
+  - m_GUID: 2b33e6e7de204a9439ec85cdb1b7b298
+    m_Address: SettingPreviews/ExperimentalPreviewUI
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

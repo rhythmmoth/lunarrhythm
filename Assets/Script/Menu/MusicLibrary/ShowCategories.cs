@@ -72,7 +72,6 @@ namespace YARG.Menu.MusicLibrary
         {
             _possibleCategories = new List<ShowCategoryType>
             {
-                new ShowCategoryType {Chance = 13, CategoryAction = RandomSource},
                 new ShowCategoryType {Chance = 12, CategoryAction = RandomArtist},
                 new ShowCategoryType {Chance = 15, CategoryAction = RandomGenre},
                 new ShowCategoryType {Chance = 10, CategoryAction = RandomDecade},
@@ -344,28 +343,6 @@ namespace YARG.Menu.MusicLibrary
             }
 
             return filtered;
-        }
-
-        private static ShowCategory RandomSource()
-        {
-            var predicate = GetActiveFilterPredicate();
-
-            // Pick a random source from the available sources
-            if (!TryChooseSubcategory(SongContainer.Sources, predicate, out var source))
-            {
-                return RandomSong();
-            }
-
-            var songs = GetFilteredSongs(SongContainer.Sources[source], predicate);
-            if (songs.Count == 0)
-            {
-                return RandomSong();
-            }
-
-            var song = songs[Rng.Next(0, songs.Count)];
-            var sourceDisplay = SongSources.SourceToGameName(source);
-
-            return new ShowCategory(Localize.KeyFormat("Menu.MusicLibrary.PlayAShow.SongFromSource", sourceDisplay), song);
         }
 
         private static ShowCategory RandomArtist()

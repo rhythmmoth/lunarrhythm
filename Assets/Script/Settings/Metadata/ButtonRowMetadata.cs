@@ -6,6 +6,9 @@ namespace YARG.Settings.Metadata
 
         public string[] Buttons { get; private set; }
 
+        /// <summary>When set, the row only shows while this returns true.</summary>
+        public System.Func<bool> Visible { get; set; }
+
         public ButtonRowMetadata(string button, bool isAdvanced = false)
             : base(isAdvanced)
         {

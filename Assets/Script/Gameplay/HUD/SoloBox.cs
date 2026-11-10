@@ -160,10 +160,13 @@ namespace YARG.Gameplay.HUD
 
             yield return new WaitForSeconds(1f);
 
-            // Show point bonus
-            _soloFullText.text = Localize.KeyFormat("Gameplay.Solo.PointsResult", soloBonus);
+            // Show point bonus; Festival scoring has none, so there's nothing to show
+            if (soloBonus > 0)
+            {
+                _soloFullText.text = Localize.KeyFormat("Gameplay.Solo.PointsResult", soloBonus);
 
-            yield return new WaitForSeconds(1f);
+                yield return new WaitForSeconds(1f);
+            }
 
             // Fade out the box
             yield return _soloBoxCanvasGroup

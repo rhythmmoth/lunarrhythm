@@ -20,35 +20,50 @@ namespace YARG.Audio.BASS
     {
         private static readonly List<BassVoxSampleChannel>  Channels = new();
         private static readonly Queue<BassVoxSampleChannel> Queue    = new();
-        private readonly        int                         _sampleHandle;
+        private static readonly Random                      Rng      = new();
+        private readonly        int[]                       _sampleHandles;
         private static          bool                        _queueActive;
 
 #nullable enable
-        public static BassVoxSampleChannel? Create(VoxSample sample, string path, OutputChannel? outputChannel)
+        /// <param name="paths">Every take of the sample; one is picked at random each time it plays.</param>
+        public static BassVoxSampleChannel? Create(VoxSample sample, IReadOnlyList<string> paths, OutputChannel? outputChannel)
 #nullable disable
         {
-            int handle = Bass.SampleLoad(path, 0, 0, 2, BassFlags.Decode);
-            if (handle == 0)
+            var handles = new List<int>();
+            var channels = new List<int>();
+            foreach (string path in paths)
             {
-                YargLogger.LogFormatError("Failed to load {0} {1}: {2}!", sample, path, Bass.LastError);
+                int handle = Bass.SampleLoad(path, 0, 0, 2, BassFlags.Decode);
+                if (handle == 0)
+                {
+                    YargLogger.LogFormatError("Failed to load {0} {1}: {2}!", sample, path, Bass.LastError);
+                    continue;
+                }
+
+                int channel = Bass.SampleGetChannel(handle);
+                if (channel == 0)
+                {
+                    Bass.SampleFree(handle);
+                    YargLogger.LogFormatError("Failed to create {0} channel: {1}!", sample, Bass.LastError);
+                    continue;
+                }
+
+                // TODO: This should probably have its own volume setting at some point
+                if (!Bass.ChannelSetAttribute(channel, ChannelAttribute.Volume, 1.0f))
+                {
+                    YargLogger.LogFormatError("Failed to set {0} volume: {1}!", sample, Bass.LastError);
+                }
+
+                handles.Add(handle);
+                channels.Add(channel);
+            }
+
+            if (handles.Count == 0)
+            {
                 return null;
             }
 
-            int channel = Bass.SampleGetChannel(handle);
-            if (channel == 0)
-            {
-                Bass.SampleFree(handle);
-                YargLogger.LogFormatError("Failed to create {0} channel: {1}!", sample, Bass.LastError);
-                return null;
-            }
-
-            // TODO: This should probably have its own volume setting at some point
-            if (!Bass.ChannelSetAttribute(channel, ChannelAttribute.Volume, 1.0f))
-            {
-                YargLogger.LogFormatError("Failed to set {0} volume: {1}!", sample, Bass.LastError);
-            }
-
-            return new BassVoxSampleChannel(handle, channel, sample, path, outputChannel);
+            return new BassVoxSampleChannel(handles.ToArray(), channels.ToArray(), sample, paths[0], outputChannel);
         }
 
         private static void QueuePlayback(BassVoxSampleChannel channel)
@@ -84,15 +99,17 @@ namespace YARG.Audio.BASS
             return false;
         }
 
-        private readonly int    _channel;
+        private readonly int[]  _channels;
+        private          int    _channel;
 
 #nullable enable
-        private BassVoxSampleChannel(int handle, int channel, VoxSample sample, string path, OutputChannel? outputChannel)
+        private BassVoxSampleChannel(int[] handles, int[] channels, VoxSample sample, string path, OutputChannel? outputChannel)
             : base(sample, path)
 #nullable disable
         {
-            _sampleHandle = handle;
-            _channel = channel;
+            _sampleHandles = handles;
+            _channels = channels;
+            _channel = channels[0];
             SetOutputChannel_Internal(outputChannel);
             Channels.Add(this);
             SetVolume_Internal(GlobalAudioHandler.GetTrueVolume(SongStem.VoxSample));
@@ -113,6 +130,7 @@ namespace YARG.Audio.BASS
                 return;
             }
 
+            _channel = _channels[Rng.Next(_channels.Length)];
             if (!Bass.ChannelPlay(_channel, true))
             {
                 YargLogger.LogFormatError("Failed to play {0} channel: {1}!", Sample, Bass.LastError);
@@ -122,9 +140,12 @@ namespace YARG.Audio.BASS
         protected override void SetVolume_Internal(double volume)
         {
             volume *= AudioHelpers.SfxSamples[(int) Sample].Volume;
-            if (!Bass.ChannelSetAttribute(_channel, ChannelAttribute.Volume, volume))
+            foreach (int channel in _channels)
             {
-                YargLogger.LogFormatError("Failed to set {0} volume: {1}!", Sample, Bass.LastError);
+                if (!Bass.ChannelSetAttribute(channel, ChannelAttribute.Volume, volume))
+                {
+                    YargLogger.LogFormatError("Failed to set {0} volume: {1}!", Sample, Bass.LastError);
+                }
             }
         }
 
@@ -132,7 +153,10 @@ namespace YARG.Audio.BASS
         protected override void SetOutputChannel_Internal(OutputChannel? channel)
 #nullable disable
         {
-            BassHelpers.UpdateOutputChannels(_channel, channel);
+            foreach (int c in _channels)
+            {
+                BassHelpers.UpdateOutputChannels(c, channel);
+            }
         }
 
         protected override bool IsPlaying_Internal()
@@ -142,7 +166,10 @@ namespace YARG.Audio.BASS
 
         protected override void DisposeUnmanagedResources()
         {
-            Bass.SampleFree(_sampleHandle);
+            foreach (int handle in _sampleHandles)
+            {
+                Bass.SampleFree(handle);
+            }
         }
     }
 }

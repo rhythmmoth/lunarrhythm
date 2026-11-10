@@ -1,0 +1,159 @@
+﻿namespace YARG.Core.Audio
+{
+    public enum SongStem
+    {
+        Master = -3,
+        DrumSfx = -2,
+        Sfx = -1,
+        Song,
+        Guitar,
+        Bass,
+        Rhythm,
+        Keys,
+        Vocals,
+        Drums,
+        Crowd,
+        Preview,
+        VoxSample,
+        Metronome,
+    }
+
+    public enum SfxSample
+    {
+        NoteMiss,
+        StarPowerAward,
+        StarPowerReady,
+        StarPowerDeploy,
+        StarPowerDeployCrowd,
+        StarPowerRelease,
+        Clap,
+        StarGain,
+        StarGold,
+        Overstrum1,
+        Overstrum2,
+        Overstrum3,
+        Overstrum4,
+        CrowdOpen1,
+        CrowdOpen2,
+        CrowdStart,
+        CrowdStart2,
+        CrowdStart3,
+        CrowdEnd1,
+        CrowdEnd2,
+        Chatter,
+        Rewind
+    }
+
+    public enum DrumSfxSample
+    {
+        Vel0Pad0Smp0,
+        Vel0Pad0Smp1,
+        Vel0Pad0Smp2,
+        Vel0Pad1Smp0,
+        Vel0Pad1Smp1,
+        Vel0Pad1Smp2,
+        Vel0Pad2Smp0,
+        Vel0Pad2Smp1,
+        Vel0Pad2Smp2,
+        Vel0Pad3Smp0,
+        Vel0Pad3Smp1,
+        Vel0Pad3Smp2,
+        Vel0Pad4Smp0,
+        Vel0Pad4Smp1,
+        Vel0Pad4Smp2,
+        Vel0Pad5Smp0,
+        Vel0Pad5Smp1,
+        Vel0Pad5Smp2,
+        Vel0Pad6Smp0,
+        Vel0Pad6Smp1,
+        Vel0Pad6Smp2,
+        Vel0Pad7Smp0,
+        Vel0Pad7Smp1,
+        Vel0Pad7Smp2,
+        Vel1Pad0Smp0,
+        Vel1Pad0Smp1,
+        Vel1Pad0Smp2,
+        Vel1Pad1Smp0,
+        Vel1Pad1Smp1,
+        Vel1Pad1Smp2,
+        Vel1Pad2Smp0,
+        Vel1Pad2Smp1,
+        Vel1Pad2Smp2,
+        Vel1Pad3Smp0,
+        Vel1Pad3Smp1,
+        Vel1Pad3Smp2,
+        Vel1Pad4Smp0,
+        Vel1Pad4Smp1,
+        Vel1Pad4Smp2,
+        Vel1Pad5Smp0,
+        Vel1Pad5Smp1,
+        Vel1Pad5Smp2,
+        Vel1Pad6Smp0,
+        Vel1Pad6Smp1,
+        Vel1Pad6Smp2,
+        Vel1Pad7Smp0,
+        Vel1Pad7Smp1,
+        Vel1Pad7Smp2,
+        Vel2Pad0Smp0,
+        Vel2Pad0Smp1,
+        Vel2Pad0Smp2,
+        Vel2Pad1Smp0,
+        Vel2Pad1Smp1,
+        Vel2Pad1Smp2,
+        Vel2Pad2Smp0,
+        Vel2Pad2Smp1,
+        Vel2Pad2Smp2,
+        Vel2Pad3Smp0,
+        Vel2Pad3Smp1,
+        Vel2Pad3Smp2,
+        Vel2Pad4Smp0,
+        Vel2Pad4Smp1,
+        Vel2Pad4Smp2,
+        Vel2Pad5Smp0,
+        Vel2Pad5Smp1,
+        Vel2Pad5Smp2,
+        Vel2Pad6Smp0,
+        Vel2Pad6Smp1,
+        Vel2Pad6Smp2,
+        Vel2Pad7Smp0,
+        Vel2Pad7Smp1,
+        Vel2Pad7Smp2
+    }
+
+    public enum VoxSample
+    {
+        FullCombo,
+        Times2,
+        Times3,
+        Times4,
+        Times5,
+        Times6,
+        TimesMany,
+        FullBandFullCombo,
+        HighScore,
+        FailSound
+    }
+
+    public enum MetronomeSample
+    {
+        None,
+        Castanet,
+        Clap,
+        Party,
+        Quartz,
+        Sine,
+        Square,
+        Trashcan,
+    }
+
+    public enum MetronomePitch
+    {
+        Hi,
+        Lo,
+    }
+
+    public enum DSPType
+    {
+        Gain,
+    }
+}

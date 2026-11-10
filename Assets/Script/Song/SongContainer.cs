@@ -1,6 +1,7 @@
 ﻿using Cysharp.Threading.Tasks;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UniRx;
 using YARG.Core;
@@ -13,6 +14,7 @@ using YARG.Helpers;
 using YARG.Helpers.Extensions;
 using YARG.Localization;
 using YARG.Menu.MusicLibrary;
+using YARG.Menu.Persistent;
 using YARG.Player;
 using YARG.Scores;
 using YARG.Settings;
@@ -135,22 +137,49 @@ namespace YARG.Song
 
         public static SongEntry[] UnfilteredSongs => _songCache.Entries.Values.SelectMany(e => e).ToArray();
 
+        public const string LOAD_LOCAL_SONGS_PREF = "LunarRhythm.LoadLocalSongs";
+
+        /// <summary>
+        /// Songs in the local "songs" folder are a debug option: off unless enabled from the
+        /// editor's LunarRhythm menu, and never in builds.
+        /// </summary>
+        public static bool LoadLocalSongs =>
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.GetBool(LOAD_LOCAL_SONGS_PREF, false);
+#else
+            false;
+#endif
+
         private static bool AllowedByRating(SongRating rating) => rating <= SettingsManager.Settings.MaxSongRating.Value;
+
+        public const string OFFLINE_NOTICE =
+            "You're offline. Sign in with Discord in Settings to download and play online songs.";
 
 #nullable enable
         public static async UniTask RunRefresh(bool quick, LoadingContext? context = null)
 #nullable disable
         {
-            var directories = new List<string>(SettingsManager.Settings.SongFolders);
-            string setlistPath = PathHelper.SetlistPath;
-            if (!string.IsNullOrEmpty(setlistPath) && !directories.Contains(setlistPath))
+            var directories = new List<string> { PathHelper.OnlineSongsPath };
+            if (LoadLocalSongs)
             {
-                directories.Add(setlistPath);
+                Directory.CreateDirectory(PathHelper.SongsPath);
+                directories.Add(PathHelper.SongsPath);
             }
+
+            // Not in git; see .gitignore. Without it the API refuses us and the saved database is used.
+            string apiKey = UnityEngine.Resources.Load<UnityEngine.TextAsset>("OnlineApiKey")?.text.Trim();
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var task = UniTask.RunOnThreadPool(() =>
             {
+                // Before Sync: song files are downloaded through links only signed-in players get
+                Leaderboards.Init(PathHelper.PersistentDataPath);
+                OnlineSongs.Sync(PathHelper.OnlineSongsPath, !GlobalVariables.OfflineMode, apiKey);
+                if (!GlobalVariables.OfflineMode)
+                {
+                    // After Sync, which hands over the API key
+                    Leaderboards.RetryQueued().GetAwaiter().GetResult();
+                }
                 _songCache =  CacheHandler.RunScan(quick,
                     PathHelper.SongCachePath,
                     PathHelper.BadSongsPath,
@@ -184,6 +213,10 @@ namespace YARG.Song
             stopwatch.Stop();
 
             YargLogger.LogFormatInfo("Scan time: {0}s", stopwatch.Elapsed.TotalSeconds);
+            if (!Leaderboards.SignedIn)
+            {
+                ToastManager.ToastWarning(OFFLINE_NOTICE);
+            }
             MusicLibraryMenu.SetReload(MusicLibraryReloadState.Full);
             SongSources.LoadSprites(context);
         }
@@ -547,6 +580,13 @@ namespace YARG.Song
 
         private static void UpdateSongUi(LoadingContext context)
         {
+            string online = OnlineSongs.Status;
+            if (!string.IsNullOrEmpty(online))
+            {
+                context.SetLoadingText("Updating online songs...", online);
+                return;
+            }
+
             var tracker = CacheHandler.Progress;
 
             string phrase = string.Empty;

@@ -96,6 +96,7 @@ namespace YARG.Menu.MusicLibrary
         private PopupMenu _popupMenu;
 
         protected override int ExtraListViewPadding => 15;
+        protected override bool PinToEdges => true;
         protected override bool CanScroll => !_popupMenu.gameObject.activeSelf;
 
         public bool ShouldDisplaySoloHighScores { get; private set; }
@@ -131,6 +132,10 @@ namespace YARG.Menu.MusicLibrary
 
             // Initialize sidebar
             _sidebar.Initialize(this, _searchField);
+
+            // The bar's sort arrows: the library has no sort to change
+            _sortInfoHeaderPrimaryText.GetComponentInParent<SongView>()?.transform.Find("Icon Background")?.gameObject
+                .SetActive(false);
 
             // Fill in sort information
             UpdateSortInformationHeader();
@@ -294,13 +299,13 @@ namespace YARG.Menu.MusicLibrary
             _sidebar.UpdatePlayButtonLabel(setListNotEmpty);
             NavigationScheme.Entry leftEntry = MenuState == MenuState.Playlist
                 ? new NavigationScheme.Entry(MenuAction.Left, "Menu.MusicLibrary.MoveInPlaylist", MovePlaylistEntryUp)
-                : new NavigationScheme.Entry(MenuAction.Left, "Menu.MusicLibrary.SkipSection", GoToPreviousSection);
+                : new NavigationScheme.Entry(MenuAction.Left, "Menu.MusicLibrary.SkipSection", GoToPreviousSection, hide: true);
 
             NavigationScheme.Entry rightEntry = MenuState == MenuState.Playlist
                 ? new NavigationScheme.Entry(MenuAction.Right, "Menu.MusicLibrary.MoveInPlaylist", MovePlaylistEntryDown)
-                : new NavigationScheme.Entry(MenuAction.Right, "Menu.MusicLibrary.SkipSection", GoToNextSection);
+                : new NavigationScheme.Entry(MenuAction.Right, "Menu.MusicLibrary.SkipSection", GoToNextSection, hide: true);
 
-            Navigator.Instance.PushScheme(new NavigationScheme(new()
+            var entries = new List<NavigationScheme.Entry>
             {
                 new NavigationScheme.Entry(MenuAction.Up, "Menu.Common.Up",
                     ctx =>
@@ -348,13 +353,17 @@ namespace YARG.Menu.MusicLibrary
                         hide: true
                     ),
                 new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", Back, hide: true),
-                setListNotEmpty ?
-                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist) :
-                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.PlayShow", EnterShowMode),
                 new NavigationScheme.Entry(MenuAction.Blue, "Menu.MusicLibrary.Filters", OpenFilters),
                 new NavigationScheme.Entry(MenuAction.Orange, "Menu.MusicLibrary.MoreOptions",
                     OnOrangeHit, OnOrangeRelease),
-            }, false));
+            };
+            if (setListNotEmpty)
+            {
+                entries.Insert(entries.Count - 2,
+                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist));
+            }
+
+            Navigator.Instance.PushScheme(new NavigationScheme(entries, false));
 
         }
 
@@ -449,144 +458,20 @@ namespace YARG.Menu.MusicLibrary
                 }
             }
 
-            if (!_searchField.IsSearching)
+            // One flat list in title order, no section headers
+            foreach (var section in _sortedSongs)
             {
-                list.Add(new ButtonViewType(
-                    Localize.Key("Menu.MusicLibrary.Playlists"),
-                    "MusicLibraryIcons[Playlists]",
-                    EnterPlaylistSelectFromLibrary,
-                    PLAYLIST_ID,
-                    Localize.Key("Menu.MusicLibrary.PlaylistsHelp")));
-
-                _primaryHeaderIndex += 1;
-
-                if (SettingsManager.Settings.LibrarySort < SortAttribute.Instrument &&
-                    SettingsManager.Settings.ShowRecommendedSongs.Value)
-                {
-                    if (_recommendedSongs != null)
-                    {
-                        string key = Localize.Key("Menu.MusicLibrary.RecommendedSongs",
-                            _recommendedSongs.Length == 1 ? "Singular" : "Plural");
-
-                        list.Add(new ButtonViewType(key, "MusicLibraryIcons[Recommended]",
-                            () =>
-                            {
-                                bool selectTopOfList = CurrentSelection is SongViewType songView &&
-                                    _recommendedSongs.Contains(songView.SongEntry);
-                                bool preserveSelectedIndex = SelectedIndex != _recommendedHeaderIndex;
-                                RefreshAndReselect(selectTopOfList, preserveSelectedIndex);
-                            },
-                            RECOMMENDED_SONGS_ID,
-                            Localize.Key("Menu.MusicLibrary.RecommendedSongsHelp")
-                        ));
-                        _recommendedHeaderIndex = list.Count - 1;
-
-                        foreach (var song in _recommendedSongs)
-                        {
-                            list.Add(new SongViewType(this, song, "recommended"));
-                        }
-                        _primaryHeaderIndex += _recommendedSongs.Length + 1;
-                    }
-                }
-            }
-
-            bool showSortHeaders = _sortedSongs.Length > 1 ||
-                YARG.Menu.Filters.FiltersMenu.ActiveFilterPredicate != null;
-
-            foreach (var (section, index) in _sortedSongs.Select((s, i) => (s, i)))
-            {
-                var displayName = section.Category;
-                if (SettingsManager.Settings.LibrarySort == SortAttribute.Source)
-                {
-                    if (SongSources.TryGetSource(section.Category, out var parsedSource))
-                    {
-                        displayName = parsedSource.GetDisplayName();
-                    }
-                    else if (section.Category.Length > 0)
-                    {
-                        displayName = section.Category;
-                    }
-                    else
-                    {
-                        displayName = SongSources.Default.GetDisplayName();
-                    }
-                }
-
-                SortHeaderViewType sortHeader = null;
-                // When searching with the generic Search Bar, results come back under a single
-                // "Search Results" category sorted by relevance.  We're showing that text in the
-                // banner and hiding the redundant category header.
-                bool hideSearchResultsHeader = _searchField.IsSearching &&
-                    string.Equals(section.Category, "Search Results", StringComparison.OrdinalIgnoreCase);
-                if (showSortHeaders && !hideSearchResultsHeader)
-                {
-                    Action onHeaderClicked = null;
-                    if (_sortedSongs.Length > 1)
-                    {
-                        onHeaderClicked = () =>
-                        {
-                            var category = _sortedSongs[index];
-                            if (_collapsedHeaders[SettingsManager.Settings.LibrarySort].Contains(category))
-                            {
-                                _collapsedHeaders[SettingsManager.Settings.LibrarySort].Remove(category);
-                            }
-                            else
-                            {
-                                _collapsedHeaders[SettingsManager.Settings.LibrarySort].Add(category);
-                            }
-
-                            var (headerIndex, offset) = GetClosestHeaderIndexAndOffset();
-                            RequestViewListUpdate();
-                            var closestHeader = ViewList[_sectionHeaderIndices[headerIndex]];
-                            if (closestHeader is SortHeaderViewType closestSortHeader && closestSortHeader.Collapsed)
-                            {
-                                // If the current section is collapsed, return to its header.
-                                offset = 0;
-                            }
-                            SelectedIndex = _sectionHeaderIndices[headerIndex] + offset;
-                        };
-                    }
-
-                    sortHeader = new SortHeaderViewType(
-                        displayName,
-                        section.Songs.Length,
-                        section.CategoryGroup,
-                        section.Songs,
-                        _collapsedHeaders[SettingsManager.Settings.LibrarySort].Contains(section),
-                        onHeaderClicked);
-                    list.Add(sortHeader);
-                }
-
-                int sectionTotalStars = 0;
-                bool includeSongs = _sortedSongs.Length <= 1 || !_collapsedHeaders[SettingsManager.Settings.LibrarySort].Contains(section);
-
                 foreach (var song in section.Songs)
                 {
                     if (!allowdupes && song.IsDuplicate) continue;
 
-                    StarAmount? starAmount;
-
-                    if (includeSongs)
-                    {
-                        var songView = new SongViewType(this, song);
-                        list.Add(songView);
-                        starAmount = songView.GetStarAmount();
-                    }
-                    else
-                    {
-                        starAmount = SongViewType.GetStarAmountForSong(song);
-                    }
-
+                    var songView = new SongViewType(this, song);
+                    list.Add(songView);
+                    var starAmount = songView.GetStarAmount();
                     if (starAmount is not null)
                     {
-                        sectionTotalStars += starAmount.Value.GetStarCount();
+                        _totalStarCount += starAmount.Value.GetStarCount();
                     }
-                }
-                _totalStarCount += sectionTotalStars;
-
-                if (sortHeader != null)
-                {
-                    sortHeader.TotalStarsCount = sectionTotalStars;
                 }
             }
 

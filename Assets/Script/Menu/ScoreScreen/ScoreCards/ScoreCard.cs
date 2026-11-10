@@ -202,8 +202,9 @@ namespace YARG.Menu.ScoreScreen
             _notesMissedContainer.gameObject.SetActive(Stats.NotesMissed != 0);
             _starpowerPhrases.text = $"{ColorizePrimary(Stats.StarPowerPhrasesHit)} / " +
                 $"{ColorizeSecondary(Stats.TotalStarPowerPhrases)}";
-            _averageMultiplier.text = ColorizePrimary(AverageMultiplier.ToString("0.00"));
-            _bandBonusScore.text = ColorizePrimary(Stats.BandBonusScore.ToString("N0"));
+            // Not used in the pad game: hide the whole rows
+            _averageMultiplier.GetComponentInParent<StatInfo>(true).gameObject.SetActive(false);
+            _bandBonusScore.GetComponentInParent<StatInfo>(true).gameObject.SetActive(false);
             _averageOffset.text = $"{ColorizePrimary(Math.Round(Stats.GetAverageOffset() * 1000, MidpointRounding.AwayFromZero))} {ColorizeSecondary("ms")}";
             _starPowerActivations.text = ColorizePrimary(Stats.StarPowerActivationCount);
             string timeInStarPower = TimeSpan.FromSeconds(Stats.TimeInStarPower).ToString(@"m\:ss");
@@ -594,7 +595,7 @@ namespace YARG.Menu.ScoreScreen
             return $"<font-weight=600><color=#FFFFFF>{s}</color></font-weight>";
         }
 
-        private string ColorizeSecondary(object s)
+        protected string ColorizeSecondary(object s)
         {
             return $"<font-weight=500><color=#7D7DA3>{s}</color></font-weight>";
         }

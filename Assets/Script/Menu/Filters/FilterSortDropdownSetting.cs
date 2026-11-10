@@ -21,7 +21,8 @@ namespace YARG.Menu.Filters
 
             foreach (var sort in EnumExtensions<SortAttribute>.Values)
             {
-                if (sort == SortAttribute.Unspecified)
+                // Source is always the same for the pad game's songs
+                if (sort is SortAttribute.Unspecified or SortAttribute.Source)
                     continue;
 
                 if (sort == SortAttribute.Playcount && PlayerContainer.OnlyHasBotsActive())

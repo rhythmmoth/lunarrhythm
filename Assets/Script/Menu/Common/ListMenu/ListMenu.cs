@@ -212,7 +212,38 @@ namespace YARG.Menu.ListMenu
                 }
             }
 
-            _viewObjectParent.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, (topHeight - bottomHeight) / 2);
+            float y = (topHeight - bottomHeight) / 2;
+            if (PinToEdges)
+            {
+                y += EdgeShift();
+            }
+            _viewObjectParent.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, y);
+        }
+
+        /// <summary>
+        /// When on, the list doesn't keep the selection centered near its ends: the first row sits at the top of the
+        /// view and the last at the bottom, instead of leaving empty space there.
+        /// </summary>
+        protected virtual bool PinToEdges => false;
+
+        // How far to move the rows (up is positive) so neither end of the list leaves a gap in the view
+        private float EdgeShift()
+        {
+            if (_viewList == null || _viewList.Count == 0 || _viewObjectParent.parent is not RectTransform view)
+            {
+                return 0f;
+            }
+
+            float row = ((RectTransform) _viewObjects[ExtraListViewPadding].transform).rect.height;
+            float half = view.rect.height / 2f;
+            // Space between the view's edge and the first/last row while the selection is centered
+            float topGap = half - (SelectedIndex + 0.5f) * row;
+            float bottomGap = half - (_viewList.Count - SelectedIndex - 0.5f) * row;
+            if (topGap > 0f)
+            {
+                return topGap; // a short list stays pinned to the top
+            }
+            return bottomGap > 0f ? -bottomGap : 0f;
         }
 
         public void OnScroll(PointerEventData eventData)

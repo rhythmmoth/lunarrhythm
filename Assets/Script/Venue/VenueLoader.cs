@@ -19,7 +19,6 @@ namespace YARG.Venue
     public static class VenueLoader
     {
         private static readonly string _venueFolder = Path.Combine(PathHelper.PersistentDataPath, "venue");
-        private static readonly string _defaultVenue = Path.Combine(Application.streamingAssetsPath, "venue", "default.yarground");
         public static string VenueFolder
         {
             get
@@ -49,10 +48,7 @@ namespace YARG.Venue
                 result = GetVenuePathFromGlobal();
             }
 
-            if (!SettingsManager.Settings.DisableDefaultBackground.Value && result == null)
-            {
-                result = LoadDefaultVenue();
-            }
+            // No built-in default venue: with nothing found, gameplay shows the menu background instead
 
             return result;
         }
@@ -109,17 +105,5 @@ namespace YARG.Venue
             return null;
         }
 
-#nullable enable
-        private static BackgroundResult? LoadDefaultVenue()
-#nullable disable
-        {
-            if (!File.Exists(_defaultVenue))
-            {
-                YargLogger.LogWarning("Default venue not found. Build error?");
-                return null;
-            }
-
-            return new BackgroundResult(BackgroundType.Yarground, File.OpenRead(_defaultVenue));
-        }
     }
 }

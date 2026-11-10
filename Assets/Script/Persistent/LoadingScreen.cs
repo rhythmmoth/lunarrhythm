@@ -101,8 +101,8 @@ namespace YARG
                 });
             }
 
-            // Fast scan (cache read) on startup
-            await SongContainer.RunRefresh(true, context);
+            // Full scan on startup so added/removed songs always show up; unchanged songs still come from the cache
+            await SongContainer.RunRefresh(false, context);
         }
 
         private void Quit()

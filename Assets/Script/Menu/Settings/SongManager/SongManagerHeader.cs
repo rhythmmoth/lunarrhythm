@@ -17,12 +17,6 @@ namespace YARG.Menu.Settings
             CheckBadSongsFile();
         }
 
-        public void AddNewFolder()
-        {
-            SettingsManager.Settings.SongFolders.Add(string.Empty);
-            SettingsMenu.Instance.RefreshAndKeepPosition();
-        }
-
         public async void RefreshSongs()
         {
             using var context = new LoadingContext();

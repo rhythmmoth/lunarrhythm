@@ -59,10 +59,9 @@ namespace YARG.Gameplay.HUD
             _albumText.text = GameManager.Song.Album;
             _songText.text = GameManager.Song.Name;
             _artistText.text = GameManager.Song.Artist;
-            _sourceText.text = SongSources.SourceToGameName(GameManager.Song.Source);
-
-            // Set source icon
-            _sourceIcon.sprite = SongSources.SourceToIcon(GameManager.Song.Source);
+            // No source name or icon in the pad game
+            _sourceText.gameObject.SetActive(false);
+            _sourceIcon.transform.parent.gameObject.SetActive(false); // the icon's own container
 
             // Set album cover
             _albumCover.LoadAlbumCover(GameManager.Song, CancellationToken.None);

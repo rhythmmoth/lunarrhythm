@@ -74,9 +74,10 @@ namespace YARG.Helpers.Extensions
             {
                 Instrument.FiveFretGuitar     => "guitar",
                 Instrument.FiveFretBass       => "bass",
-                Instrument.FiveFretRhythm     => "rhythm",
+                // Pad game: Rhythm is the Drums part and Keys is the Vocals part
+                Instrument.FiveFretRhythm     => "drums",
                 Instrument.FiveFretCoopGuitar => "guitarCoop",
-                Instrument.Keys               => "keys",
+                Instrument.Keys               => "vocals",
 
                 Instrument.FourLaneDrums => "drums",
                 Instrument.ProDrums      => "realDrums",

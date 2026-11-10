@@ -323,7 +323,7 @@ namespace YARG.Gameplay.Player
                 }
             }
 
-            phrases.AddRange(EngineContainer.UnisonPhrases);
+            // No unison effect: Festival has no unison bonus
 
             var effects = TrackEffect.PhrasesToEffects(phrases);
             _trackEffects.AddRange(effects);

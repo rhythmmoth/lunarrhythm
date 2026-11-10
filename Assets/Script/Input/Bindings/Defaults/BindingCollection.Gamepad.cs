@@ -65,7 +65,7 @@ namespace YARG.Input
 
                 // These ain't happening lol
                 // GameMode.ProGuitar => SetDefaultProGuitarBindings_Gamepad(gamepad),
-                // GameMode.ProKeys => SetDefaultProKeysBindings_Gamepad(gamepad),
+                GameMode.ProKeys => SetDefaultPadBindings_Gamepad(gamepad),
 
                 GameMode.Vocals => SetDefaultVocalsBindings_Gamepad(gamepad),
 
@@ -90,6 +90,23 @@ namespace YARG.Input
             AddBinding(GuitarAction.StarPower, gamepad.selectButton);
 
             AddBinding(GuitarAction.Whammy, gamepad.leftStick.x);
+
+            return true;
+        }
+
+        private bool SetDefaultPadBindings_Gamepad(Gamepad gamepad)
+        {
+            if (Mode != GameMode.ProKeys)
+                return false;
+
+            // Same lane layout as the 5-fret gamepad defaults
+            AddBinding(ProKeysAction.GreenKey, gamepad.leftTrigger);
+            AddBinding(ProKeysAction.RedKey, gamepad.leftShoulder);
+            AddBinding(ProKeysAction.YellowKey, gamepad.rightShoulder);
+            AddBinding(ProKeysAction.BlueKey, gamepad.rightTrigger);
+            AddBinding(ProKeysAction.OrangeKey, gamepad.buttonSouth);
+
+            AddBinding(ProKeysAction.StarPower, gamepad.selectButton);
 
             return true;
         }

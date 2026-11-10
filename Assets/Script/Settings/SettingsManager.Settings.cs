@@ -61,7 +61,6 @@ namespace YARG.Settings
 
             #region Hidden Settings
 
-            public List<string> SongFolders = new();
 
             public bool ShowAntiPiracyDialog = true;
             public bool ShowEngineInconsistencyDialog = true;
@@ -118,7 +117,6 @@ namespace YARG.Settings
                 NoFailMode.NoMeter
             };
 
-            public ToggleSetting DisableDefaultBackground  { get; } = new(false);
             public ToggleSetting DisableGlobalBackgrounds  { get; } = new(false);
             public ToggleSetting DisablePerSongBackgrounds { get; } = new(false);
             public ToggleSetting WaitForSongVideo          { get; } = new(true);
@@ -151,9 +149,10 @@ namespace YARG.Settings
             public ToggleSetting MuteOnFocusLoss { get; } = new(false);
 
             public ToggleSetting WrapAroundNavigation { get; } = new(true);
+            public ToggleSetting OverdriveHitsNotes { get; } = new(true);
 
             public DropdownSetting<DiscordRichPresenceMode> DiscordRichPresence { get; }
-                = new(DiscordRichPresenceMode.Show, DiscordRichPresenceCallback)
+                = new(DiscordRichPresenceMode.Hide, DiscordRichPresenceCallback)
                 {
                     DiscordRichPresenceMode.Show,
                     DiscordRichPresenceMode.Limited,
@@ -288,7 +287,7 @@ namespace YARG.Settings
                 AudioFxMode.On
             };
 
-            public DropdownSetting<CrowdFxMode> UseCrowdFx { get; } = new(CrowdFxMode.Enabled)
+            public DropdownSetting<CrowdFxMode> UseCrowdFx { get; } = new(CrowdFxMode.Disabled)
             {
                 CrowdFxMode.Disabled,
                 CrowdFxMode.StarpowerClapsOnly,
@@ -468,6 +467,50 @@ namespace YARG.Settings
             public void CopyCurrentSongJsonFilePath()
             {
                 GUIUtility.systemCopyBuffer = CurrentSongController.JsonFilePath;
+            }
+
+            public void SignInWithDiscord()
+            {
+                SignInWithDiscordAsync().Forget();
+            }
+
+            private static async Cysharp.Threading.Tasks.UniTaskVoid SignInWithDiscordAsync()
+            {
+                ToastManager.ToastInformation("Finish signing in with Discord in your browser.");
+                string name = await Leaderboards.SignIn(url => Application.OpenURL(url));
+                if (name != null)
+                {
+                    ToastManager.ToastSuccess($"Signed in to the leaderboards as {name}.");
+                    // Song files only download for signed-in players, so fetch what was skipped while signed out
+                    using var context = new LoadingContext();
+                    await SongContainer.RunRefresh(false, context);
+                }
+                else
+                {
+                    ToastManager.ToastWarning("Discord sign-in didn't finish. Try again.");
+                }
+                RefreshLeaderboardRows();
+            }
+
+            // Swaps Sign In for Sign Out (and back) and updates the account panel
+            private static void RefreshLeaderboardRows()
+            {
+                if (SettingsMenu.Instance != null && SettingsMenu.Instance.gameObject.activeInHierarchy)
+                {
+                    SettingsMenu.Instance.RefreshAndKeepPosition();
+                }
+            }
+
+            public void SignOutOfLeaderboards()
+            {
+                SignOutAsync().Forget();
+            }
+
+            private static async Cysharp.Threading.Tasks.UniTaskVoid SignOutAsync()
+            {
+                await Leaderboards.SignOut();
+                ToastManager.ToastInformation("Signed out of the leaderboards.");
+                RefreshLeaderboardRows();
             }
 
             public void OpenPersistentDataPath()

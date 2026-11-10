@@ -20,6 +20,7 @@ using YARG.Helpers;
 using YARG.Helpers.Extensions;
 using YARG.Playback;
 using YARG.Player;
+using YARG.Settings;
 using YARG.Themes;
 using static YARG.Core.Engine.Keys.FiveLaneKeysEngine;
 
@@ -94,18 +95,49 @@ namespace YARG.Assets.Script.Gameplay.Player
             { (int) FiveFretGuitarFret.Orange,  5 }
         };
 
+        // Festival's Easy/Medium/Hard use only the first four lanes. Orange shares the blue lane so lookups never
+        // miss, but four lanes are only used when the chart really has no orange notes (e.g. tutorial charts do).
+        private static readonly Dictionary<int, int> FOUR_LANE_HIGHWAY_ORDERING = new()
+        {
+            { (int) FiveFretGuitarFret.Green,  0 },
+            { (int) FiveFretGuitarFret.Red,    1 },
+            { (int) FiveFretGuitarFret.Yellow, 2 },
+            { (int) FiveFretGuitarFret.Blue,   3 },
+            { (int) FiveFretGuitarFret.Orange, 3 },
+        };
+
+        // Decided once per song in MakeHighwayOrdering
+        private bool UsingFourLanes { get; set; }
+
+        private bool ChartHasOrange()
+        {
+            foreach (var parent in NoteTrack.Notes)
+            {
+                foreach (var note in parent.AllNotes)
+                {
+                    if (note.Fret == (int) FiveFretGuitarFret.Orange)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
 public override bool ShouldUpdateInputsOnResume => true;
 
         /// See <see cref="StarMultiplierThresholds"/>
+        // Lowered for Festival scoring (no unison bonus, delayed multiplier)
         private static float[] GuitarStarMultiplierThresholds => new[]
         {
-            0.06f, 0.12f, 0.2f, 0.47f, 0.78f, 1.15f
+            0.05f, 0.11f, 0.18f, 0.4f, 0.68f, 1.05f
         };
 
         /// See <see cref="StarMultiplierThresholds"/>
         private static float[] BassStarMultiplierThresholds => new[]
         {
-            0.05f, 0.1f, 0.19f, 0.47f, 0.78f, 1.15f
+            0.05f, 0.11f, 0.18f, 0.4f, 0.68f, 1.05f
         };
 
         public KeysEngineParameters EngineParams { get; private set; }
@@ -157,8 +189,8 @@ public override bool ShouldUpdateInputsOnResume => true;
 
         protected override FiveLaneKeysEngine CreateEngine()
         {
-            // If on bass, replace the star multiplier threshold
-            bool isBass = Player.Profile.CurrentInstrument == Instrument.FiveFretBass;
+            // If on bass, replace the star multiplier threshold. Festival gives Vocals the bass 6x multiplier too.
+            bool isBass = Player.Profile.CurrentInstrument is Instrument.FiveFretBass or Instrument.Keys;
             if (isBass)
             {
                 StarMultiplierThresholds = BassStarMultiplierThresholds;
@@ -182,7 +214,10 @@ public override bool ShouldUpdateInputsOnResume => true;
                 EngineContainer = null;
             }
 
-            var engine = new YargFiveLaneKeysEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot);
+            var engine = new YargFiveLaneKeysEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot)
+            {
+                OverdriveHitsNotes = SettingsManager.Settings.OverdriveHitsNotes.Value,
+            };
             EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
 
             HitWindow = EngineParams.HitWindow;
@@ -190,6 +225,7 @@ public override bool ShouldUpdateInputsOnResume => true;
             YargLogger.LogFormatDebug("Note count: {0}", NoteTrack.Notes.Count);
 
             engine.OnNoteHit += OnNoteHit;
+            engine.OnHitJudged += TrackView.ShowJudgement;
             engine.OnNoteMissed += OnNoteMissed;
             engine.OnOverhit += OnOverhit;
 
@@ -382,7 +418,9 @@ public override bool ShouldUpdateInputsOnResume => true;
 
         private void UpdateFretArray()
         {
-            for (var action = FiveLaneKeysAction.GreenKey; action <= FiveLaneKeysAction.OrangeKey; action++)
+            // With four lanes, orange shares the blue fret; stopping at blue keeps it from overwriting blue's state
+            var lastKey = UsingFourLanes ? FiveLaneKeysAction.BlueKey : FiveLaneKeysAction.OrangeKey;
+            for (var action = FiveLaneKeysAction.GreenKey; action <= lastKey; action++)
             {
                 _fretArray.SetPressed((int)GetFretIndex(action), Engine.IsKeyHeld(action));
             }
@@ -560,7 +598,7 @@ public override bool ShouldUpdateInputsOnResume => true;
             {
                 _fretArray.PlayOpenMissAnimation();
             }
-            else
+            else if (!(UsingFourLanes && key is (int) FiveLaneKeysAction.OrangeKey)) // orange has no fret of its own then
             {
                 _fretArray.PlayMissAnimation((int)GetFretIndex((FiveLaneKeysAction)key));
             }
@@ -821,6 +859,7 @@ public override bool ShouldUpdateInputsOnResume => true;
         private void MakeHighwayOrdering()
         {
             UsingOpenLane = ShouldUseOpenLane();
+            UsingFourLanes = Player.Profile.CurrentDifficulty < Difficulty.Expert && !ChartHasOrange();
 
             if (UsingOpenLane)
             {
@@ -848,8 +887,8 @@ public override bool ShouldUpdateInputsOnResume => true;
             }
             else
             {
-                LaneCount = 5;
-                _highwayOrdering = FiveFretGuitarPlayer.DEFAULT_HIGHWAY_ORDERING;
+                LaneCount = UsingFourLanes ? 4 : 5;
+                _highwayOrdering = UsingFourLanes ? FOUR_LANE_HIGHWAY_ORDERING : FiveFretGuitarPlayer.DEFAULT_HIGHWAY_ORDERING;
                 _actionToBreLaneIndex = new()
                 {
                     { FiveLaneKeysAction.OpenNote, FiveLaneKeysBreLaneIndex.Green },
@@ -866,8 +905,12 @@ public override bool ShouldUpdateInputsOnResume => true;
                     { _highwayOrdering[(int)FiveFretGuitarFret.Red], FiveLaneKeysBreLaneIndex.Red },
                     { _highwayOrdering[(int)FiveFretGuitarFret.Yellow], FiveLaneKeysBreLaneIndex.Yellow },
                     { _highwayOrdering[(int)FiveFretGuitarFret.Blue], FiveLaneKeysBreLaneIndex.Blue },
-                    { _highwayOrdering[(int)FiveFretGuitarFret.Orange], FiveLaneKeysBreLaneIndex.Orange },
                 };
+                if (!UsingFourLanes)
+                {
+                    _highwayOrderingIndexToBreLaneIndex.Add(_highwayOrdering[(int) FiveFretGuitarFret.Orange],
+                        FiveLaneKeysBreLaneIndex.Orange);
+                }
             }
         }
 

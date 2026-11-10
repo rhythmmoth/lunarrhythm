@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using TMPro;
@@ -13,6 +14,8 @@ using YARG.Core.Utility;
 using YARG.Helpers.Extensions;
 using YARG.Menu.Navigation;
 using YARG.Menu.Persistent;
+using YARG.Player;
+using YARG.Scores;
 using YARG.Song;
 using static System.Globalization.CultureInfo;
 
@@ -102,24 +105,59 @@ namespace YARG.Menu.MusicLibrary
 
         private float _albumBaseFontSize;
         private float _charterBaseFontSize;
-        private float _sourceBaseFontSize;
+
+        // Leaderboard per ring, in ring order: API name and the label on the card
+        private static readonly (string Api, string Label)[] Boards =
+            { ("guitar", "LEAD"), ("bass", "BASS"), ("drums", "DRUMS"), ("vocals", "VOCALS") };
+
+        private LeaderboardCard _leaderboard;
+        private int _boardIndex;
+        private SongEntry _boardSong;
 
         public void Initialize(MusicLibraryMenu musicLibraryMenu, SongSearchingField songSearchingField)
         {
             _musicLibraryMenu = musicLibraryMenu;
             _songSearchingField = songSearchingField;
 
-            for (int i = 0; i < 5; ++i)
+            _difficultyRingsBottomContainer.gameObject.SetActive(false);
+
+            // Backing image of the removed source icon: blank and translucent, it showed as grey bars
+            _sourceBackground.enabled = false;
+
+            // The source line and icon are gone, so shrink their shared container (sized for the icon)
+            // down to the charter row and let the info below move up
+            if (_charterContainer.transform.parent.TryGetComponent<LayoutElement>(out var sourceIconContainer))
             {
-                var go = Instantiate(_difficultyRingPrefab, _difficultyRingsTopContainer);
-                _difficultyRings.Add(go.GetComponent<DifficultyRing>());
+                float charterHeight = ((RectTransform) _charterContainer.transform).sizeDelta.y;
+                sourceIconContainer.minHeight = charterHeight;
+                sourceIconContainer.preferredHeight = charterHeight;
             }
 
-            for (int i = 0; i < 5; ++i)
+            // One ring per pad part: Lead, Bass, Drums, Vocals
+            for (int i = 0; i < 4; ++i)
             {
-                var go = Instantiate(_difficultyRingPrefab, _difficultyRingsBottomContainer);
-                _difficultyRings.Add(go.GetComponent<DifficultyRing>());
+                var go = Instantiate(_difficultyRingPrefab, _difficultyRingsTopContainer);
+                var ring = go.GetComponent<DifficultyRing>();
+                int index = i;
+                ring.Clicked += _ => SelectBoard(index);
+                go.AddComponent<CanvasGroup>();
+                _difficultyRings.Add(ring);
             }
+
+            // _difficultiesDisplay is the rings themselves; their block's parent is the sidebar's column.
+            // Taken before CompactLayout, which points _difficultiesDisplay at a new ring row.
+            var sidebarColumn = _difficultiesDisplay.transform.parent.parent;
+            try
+            {
+                CompactLayout();
+            }
+            catch (Exception e)
+            {
+                // Only cosmetic: the library must still open if the prefab changes shape
+                YARG.Core.Logging.YargLogger.LogException(e, "Couldn't compact the sidebar layout");
+            }
+            _leaderboard = LeaderboardCard.Create(sidebarColumn, _charter.font);
+            _boardIndex = DefaultBoard();
 
             UpdatePlayButtonLabel(_musicLibraryMenu.ShowPlaylist.Count > 0);
 
@@ -131,6 +169,106 @@ namespace YARG.Menu.MusicLibrary
             }
 
             _favoriteButton.Initialize(FavoriteClick);
+        }
+
+        /// <summary>Shrinks the cover, the gaps and the rings so the leaderboard fits underneath.</summary>
+        private void CompactLayout()
+        {
+            const float cover = 230f;
+            const float top = 28f;     // above the cover
+            const float spacing = 18f; // between the cover and the play button
+            const float ring = 64f;
+
+            var coverBox = _albumCoverSmall.transform.parent.parent;   // holds the mask and border, sized by layout
+            var coverColumn = (RectTransform) coverBox.parent;         // the cover above the play button
+            var coverImage = (RectTransform) coverColumn.parent;
+            var coverContainer = coverImage.parent;                    // the whole block, 500 tall
+            foreach (var rect in coverBox.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rect != coverBox && rect.anchorMin == rect.anchorMax)
+                {
+                    rect.sizeDelta = new Vector2(cover, cover);
+                }
+            }
+            var coverLayout = coverBox.GetComponent<LayoutElement>();
+            coverLayout.preferredWidth = coverLayout.preferredHeight = cover;
+
+            var column = coverColumn.GetComponent<VerticalLayoutGroup>();
+            column.padding.top = (int) top;
+            column.padding.bottom = 0;
+            column.childAlignment = TextAnchor.UpperCenter; // was centered, which pushed the button into the rows below
+            column.spacing = spacing;
+            float button = column.transform.GetChild(column.transform.childCount - 1).GetComponent<LayoutElement>()
+                .preferredHeight;
+            // The column starts below the block's top (it's inset inside the block's image), so count that too
+            float inset = -(coverImage.offsetMax.y + coverColumn.offsetMax.y);
+            // It keeps the block square to the sidebar's width every frame, which would undo the shrink
+            coverContainer.GetComponent<YARG.Helpers.UI.LayoutElementFitParent>().enabled = false;
+            coverContainer.GetComponent<LayoutElement>().preferredHeight = inset + top + cover + spacing + button;
+
+            var oldRings = _difficultiesDisplay.transform.parent;
+            var inner = oldRings.parent;
+            var gap = inner.Find("Padding").GetComponent<LayoutElement>();
+            gap.minHeight = gap.preferredHeight = 22f;
+            _timeContainer.transform.parent.GetComponent<VerticalLayoutGroup>().spacing = 10f;
+
+            // The rings' own block sizes them from the sidebar's width and lets them hang outside it. Give them a
+            // plain row of fixed-size rings instead, with room under each for its best score.
+            var row = new GameObject("Rings", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+            row.transform.SetParent(inner, false);
+            row.transform.SetSiblingIndex(oldRings.GetSiblingIndex());
+            var rowLayout = row.GetComponent<HorizontalLayoutGroup>();
+            rowLayout.childAlignment = TextAnchor.UpperCenter;
+            rowLayout.spacing = 34f;
+            rowLayout.padding.top = 16;
+            rowLayout.childControlWidth = rowLayout.childControlHeight = false;
+            rowLayout.childForceExpandWidth = rowLayout.childForceExpandHeight = false;
+            var rowSize = row.GetComponent<LayoutElement>();
+            rowSize.minHeight = rowSize.preferredHeight = 16f + ring + 44f; // the best score hangs below the ring
+            foreach (var r in _difficultyRings)
+            {
+                r.transform.SetParent(row.transform, false);
+                ((RectTransform) r.transform).sizeDelta = new Vector2(ring, ring);
+            }
+
+            oldRings.gameObject.SetActive(false);
+            _difficultiesDisplay = row; // so showing and hiding the rings acts on the new row
+        }
+
+        /// <summary>The ring of the part the (single) player has picked, else Lead.</summary>
+        private static int DefaultBoard()
+        {
+            var humans = PlayerContainer.Players.Where(p => !p.Profile.IsBot).ToList();
+            return humans.Count != 1 ? 0 : humans[0].Profile.CurrentInstrument switch
+            {
+                Instrument.FiveFretBass   => 1,
+                Instrument.FiveFretRhythm => 2,
+                Instrument.Keys           => 3,
+                _                         => 0,
+            };
+        }
+
+        private void SelectBoard(int index)
+        {
+            _boardIndex = index;
+            if (_boardSong != null)
+            {
+                ShowBoard();
+            }
+        }
+
+        private void ShowBoard()
+        {
+            for (int i = 0; i < _difficultyRings.Count; i++)
+            {
+                _difficultyRings[i].GetComponent<CanvasGroup>().alpha = i == _boardIndex ? 1f : 0.45f;
+            }
+
+            string folder = _boardSong.ActualLocation;
+            string shortname = OnlineSongs.IsOnlineFolder(folder)
+                ? System.IO.Path.GetFileName(folder.TrimEnd('/', '\\'))
+                : null;
+            _leaderboard.Show(shortname, Boards[_boardIndex].Api, Boards[_boardIndex].Label);
         }
 
         public void RefreshFavoriteState()
@@ -182,7 +320,6 @@ namespace YARG.Menu.MusicLibrary
         private void ShowCategoryInfo(CategoryViewType categoryViewType)
         {
             _genreSpacer.SetActive(true);
-            SetText(_sourceContainer, _source, categoryViewType.SourceCountText);
             SetText(_charterContainer, _charter, categoryViewType.CharterCountText);
             SetText(_genreContainer, _genre, categoryViewType.GenreCountText + ",");
             SetText(_genreContainer, _subgenre, categoryViewType.SubgenreCountText);
@@ -191,7 +328,6 @@ namespace YARG.Menu.MusicLibrary
         private void ShowCategoryInfo(SortHeaderViewType sortHeaderViewType)
         {
             _genreSpacer.SetActive(true);
-            SetText(_sourceContainer, _source, sortHeaderViewType.SourceCountText);
             SetText(_charterContainer, _charter, sortHeaderViewType.CharterCountText);
             SetText(_genreContainer, _genre, sortHeaderViewType.GenreCountText + ",");
             SetText(_genreContainer, _subgenre, sortHeaderViewType.SubgenreCountText);
@@ -205,6 +341,8 @@ namespace YARG.Menu.MusicLibrary
             _sourceBackground.enabled = false;
 
             _difficultiesDisplay.SetActive(false);
+            _boardSong = null;
+            _leaderboard.Hide();
             _playButton.DisableButton();
             _favoriteButton.DisableButton();
 
@@ -228,7 +366,7 @@ namespace YARG.Menu.MusicLibrary
             var songEntry = songViewType.SongEntry;
 
             SetWrappedText(_albumTitleContainer, _album, songEntry.Album, ref _albumBaseFontSize);
-            SetWrappedText(_sourceContainer, _source, SongSources.SourceToGameName(songEntry.Source), ref _sourceBaseFontSize);
+            _sourceContainer.SetActive(false); // no source line in the pad game
             SetWrappedText(_charterContainer, _charter, songEntry.Charter, ref _charterBaseFontSize);
 
             _genreContainer.SetActive(true); // Empty genres are rendered as "Unknown Genre", so this should always be active
@@ -269,14 +407,8 @@ namespace YARG.Menu.MusicLibrary
             }
 
             UpdateDifficulties(songEntry);
-
-            var icon = SongSources.SourceToIcon(songEntry.Source);
-
-            if (icon is not null)
-            {
-                _sourceBackground.enabled = true;
-                _sourceBackground.sprite = icon;
-            }
+            _boardSong = songEntry;
+            ShowBoard();
 
             _playButton.EnableButton();
             _favoriteButton.EnableButton();
@@ -355,87 +487,17 @@ namespace YARG.Menu.MusicLibrary
 
             _difficultyRings[0].SetInfo("guitar", Instrument.FiveFretGuitar, entry[Instrument.FiveFretGuitar]);
             _difficultyRings[1].SetInfo("bass", Instrument.FiveFretBass, entry[Instrument.FiveFretBass]);
+            _difficultyRings[2].SetInfo("drums", Instrument.FiveFretRhythm, entry[Instrument.FiveFretRhythm]);
+            _difficultyRings[3].SetInfo("vocals", Instrument.Keys, entry[Instrument.Keys]);
 
-            // 5-lane or 4-lane
-            if (entry.HasInstrument(Instrument.FiveLaneDrums))
+            // Best score per part for the (single) human player; nothing to show for a band or no players
+            var humans = PlayerContainer.Players.Where(p => !p.Profile.IsBot).ToList();
+            foreach (var ring in _difficultyRings)
             {
-                _difficultyRings[2].SetInfo("ghDrums", Instrument.FiveLaneDrums, entry[Instrument.FiveLaneDrums]);
-            }
-            else if (entry.HasInstrument(Instrument.ProDrums))
-            {
-                _difficultyRings[2].SetInfo("realDrums", Instrument.ProDrums, entry[Instrument.ProDrums]);
-            }
-            else
-            {
-                _difficultyRings[2].SetInfo("drums", Instrument.FourLaneDrums, entry[Instrument.FourLaneDrums]);
-            }
-
-            _difficultyRings[3].SetInfo("keys", Instrument.Keys, entry[Instrument.Keys]);
-
-            var vocalsPart = GetVocalsPartValues(entry);
-
-            _difficultyRings[4].SetInfo(vocalsPart.PartIcon, Instrument.Vocals, vocalsPart.PartValues);
-
-            // Protar or Co-op
-            if (entry.HasInstrument(Instrument.ProGuitar_17Fret) || entry.HasInstrument(Instrument.ProGuitar_22Fret))
-            {
-                var values = entry[Instrument.ProGuitar_17Fret];
-                var instrument = Instrument.ProGuitar_17Fret;
-                if (values.Intensity == -1 && entry.HasInstrument(Instrument.ProGuitar_22Fret))
-                {
-                    values = entry[Instrument.ProGuitar_22Fret];
-                    instrument = Instrument.ProGuitar_22Fret;
-                }
-                _difficultyRings[5].SetInfo("realGuitar", instrument, values);
-            }
-            else
-            {
-                _difficultyRings[5].SetInfo("guitarCoop", Instrument.FiveFretCoopGuitar, entry[Instrument.FiveFretCoopGuitar]);
-            }
-
-            // ProBass or Rhythm
-            if (entry.HasInstrument(Instrument.ProBass_17Fret) || entry.HasInstrument(Instrument.ProBass_22Fret))
-            {
-                var values = entry[Instrument.ProBass_17Fret];
-                var instrument = Instrument.ProBass_17Fret;
-                if (values.Intensity == -1 && entry.HasInstrument(Instrument.ProBass_22Fret))
-                {
-                    values = entry[Instrument.ProBass_22Fret];
-                    instrument = Instrument.ProBass_22Fret;
-                }
-                _difficultyRings[6].SetInfo("realBass", instrument, values);
-            }
-            else
-            {
-                _difficultyRings[6].SetInfo("rhythm", Instrument.FiveFretRhythm, entry[Instrument.FiveFretRhythm]);
-            }
-
-            _difficultyRings[7].SetInfo("eliteDrums", Instrument.EliteDrums, entry[Instrument.EliteDrums]);
-            _difficultyRings[8].SetInfo("realKeys", Instrument.ProKeys, entry[Instrument.ProKeys]);
-            _difficultyRings[9].SetInfo("band", Instrument.Band, entry[Instrument.Band]);
-            return;
-
-            static (string PartIcon, PartValues PartValues) GetVocalsPartValues(SongEntry songEntry)
-            {
-                PartValues vocalsPart;
-
-                if (!songEntry.HasInstrument(Instrument.Vocals) && songEntry.HasInstrument(Instrument.Harmony))
-                {
-                    vocalsPart = songEntry[Instrument.Harmony];
-                }
-                else
-                {
-                    vocalsPart = songEntry[Instrument.Vocals];
-                }
-
-                var partIcon = songEntry.VocalsCount switch
-                {
-                    >= 3 => "harmVocals",
-                    2    => "twoVocals",
-                    _    => "vocals",
-                };
-
-                return (partIcon, vocalsPart);
+                var record = humans.Count == 1
+                    ? ScoreContainer.GetHighScore(entry.Hash, humans[0].Profile.Id, ring.Instrument, allowCacheUpdate: false)
+                    : null;
+                ring.SetBestScore(record);
             }
         }
 

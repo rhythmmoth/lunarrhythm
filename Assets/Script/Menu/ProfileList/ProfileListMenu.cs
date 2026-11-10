@@ -140,7 +140,7 @@ namespace YARG.Menu.ProfileList
                 Name = GetUniqueProfileName("New Profile"),
                 NoteSpeed = 5,
                 HighwayLength = 1,
-                GameMode = GameMode.FiveFretGuitar
+                GameMode = GameMode.ProKeys
             });
 
             RefreshList();
@@ -153,7 +153,7 @@ namespace YARG.Menu.ProfileList
                 Name = GetUniqueProfileName("Bot"),
                 NoteSpeed = 5,
                 HighwayLength = 1,
-                GameMode = GameMode.FiveFretGuitar,
+                GameMode = GameMode.ProKeys,
                 IsBot = true
             });
 

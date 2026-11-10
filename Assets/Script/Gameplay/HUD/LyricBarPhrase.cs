@@ -222,10 +222,11 @@ namespace YARG.Gameplay.HUD
         {
             var lyrics = _phrases[_currentPhraseIndex].Phrase.Lyrics;
             _builder.Clear();
-            // Highlighted words
+            // Highlighted words (none for a line with no word timing)
+            int highlighted = lyrics.Count > 0 && lyrics[0].LineTimed ? 0 : _currentLyricIndex;
             _builder.Append("<color=#5CB9FF>");
             int i = 0;
-            while (i < _currentLyricIndex)
+            while (i < highlighted)
             {
                 var lyric = lyrics[i++];
                 _builder.Append(lyric.Text);

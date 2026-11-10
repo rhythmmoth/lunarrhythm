@@ -17,7 +17,6 @@ namespace YARG.Gameplay.HUD
             nameof(SettingsManager.Settings.SongVolume),
             nameof(SettingsManager.Settings.CrowdVolume),
             nameof(SettingsManager.Settings.SfxVolume),
-            nameof(SettingsManager.Settings.VocalMonitoring),
             nameof(SettingsManager.Settings.MetronomeVolume),
         };
 

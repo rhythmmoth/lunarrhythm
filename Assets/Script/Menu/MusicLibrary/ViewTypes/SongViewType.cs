@@ -57,7 +57,8 @@ namespace YARG.Menu.MusicLibrary
         public override Sprite? GetIcon()
 #nullable disable
         {
-            return SongSources.SourceToIcon(SongEntry.Source);
+            // No source icons in the pad game
+            return null;
         }
 
         public override string GetSideText(bool selected)

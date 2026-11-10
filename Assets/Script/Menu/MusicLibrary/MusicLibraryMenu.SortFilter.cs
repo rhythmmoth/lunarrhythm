@@ -374,15 +374,8 @@ namespace YARG.Menu.MusicLibrary
                 }
                 else if (SettingsManager.Settings.LibrarySort < SortAttribute.Instrument)
                 {
-                    var sortingBy = TextColorer.StyleString("SORTED BY ",
-                        MenuData.Colors.HeaderTertiary,
-                        600);
-
-                    var sortKey = TextColorer.StyleString(SettingsManager.Settings.LibrarySort.ToLocalizedName(),
-                        MenuData.Colors.HeaderSecondary,
-                        700);
-
-                    _sortInfoHeaderPrimaryText.text = ZString.Concat(sortingBy, sortKey);
+                    // The library is always in title order, so there's nothing to say about sorting
+                    _sortInfoHeaderPrimaryText.text = string.Empty;
                 }
                 else
                 {

@@ -7,6 +7,7 @@ using UnityEngine.UI;
 using YARG.Core;
 using YARG.Core.Song;
 using YARG.Helpers.Extensions;
+using YARG.Scores;
 using YARG.Settings;
 
 namespace YARG.Menu.MusicLibrary
@@ -47,7 +48,9 @@ namespace YARG.Menu.MusicLibrary
         private Color _partSelectedColor;
 
         private SongSearchingField _songSearchingField;
+        private TextMeshProUGUI _bestScore;
         private Instrument _instrument;
+        public Instrument Instrument => _instrument;
         private int _intensity;
         private bool _active;
 
@@ -163,6 +166,45 @@ namespace YARG.Menu.MusicLibrary
             UpdateIconColor();
         }
 
+        /// <summary>
+        /// Shows the player's best score on this part under the ring ("-" when never played).
+        /// </summary>
+        public void SetBestScore(PlayerScoreRecord record)
+        {
+            if (_bestScore == null)
+            {
+                // Built from the intensity number so it uses the same font, under the visible ring
+                // (the ring's own rect is much taller than the ring graphic)
+                _bestScore = Instantiate(_intensityNumber, _ringBase.transform);
+                _bestScore.name = "Best Score";
+                _bestScore.enableAutoSizing = false;
+                _bestScore.fontSize = 22f;
+                _bestScore.alignment = TextAlignmentOptions.Top;
+                _bestScore.enableWordWrapping = false;
+                _bestScore.overflowMode = TextOverflowModes.Overflow;
+                _bestScore.richText = true;
+
+                var rect = _bestScore.rectTransform;
+                rect.anchorMin = new Vector2(0.5f, 0f);
+                rect.anchorMax = new Vector2(0.5f, 0f);
+                rect.pivot = new Vector2(0.5f, 1f);
+                rect.anchoredPosition = new Vector2(0f, -8f);
+                rect.sizeDelta = new Vector2(120f, 50f);
+                rect.localScale = Vector3.one;
+            }
+
+            // Nothing for a part the song lacks or the player hasn't played
+            if (!_active || record == null)
+            {
+                _bestScore.text = string.Empty;
+                return;
+            }
+
+            _bestScore.text = record.IsFc
+                ? $"{record.Score:N0}\n<size=65%><alpha=#B0>FC</size>"
+                : $"{record.Score:N0}";
+        }
+
         private static Sprite GetIcon(string assetName)
         {
             string assetKey = $"InstrumentIcons[{assetName}]";
@@ -190,8 +232,16 @@ namespace YARG.Menu.MusicLibrary
             _instrumentIcon.color = Color.white.WithAlpha(ACTIVE_OPACITY);
         }
 
+        /// <summary>Left clicks, so the sidebar can switch the leaderboard to this ring's instrument.</summary>
+        public event System.Action<DifficultyRing> Clicked;
+
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (eventData.button == PointerEventData.InputButton.Left)
+            {
+                Clicked?.Invoke(this);
+            }
+
             if (_songSearchingField == null)
             {
                 return;

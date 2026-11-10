@@ -24,16 +24,16 @@
             "FourLaneDrums": "Drumkit (4-Lane, Pro)",
             "FiveLaneDrums": "Drumkit (5-Lane)",
             "ProGuitar": "Pro Guitar (17-Fret, 22-Fret)",
-            "ProKeys": "Keys (5-Lane, Pro)",
+            "ProKeys": "Pad",
             "Menu": "Menu",
             "Vocals": "Vocals"
         },
         "Instrument": {
-            "FiveFretGuitar": "Guitar",
+            "FiveFretGuitar": "Lead",
             "FiveFretBass": "Bass",
-            "FiveFretRhythm": "Rhythm",
+            "FiveFretRhythm": "Drums",
             "FiveFretCoopGuitar": "Co-op",
-            "Keys": "Keys",
+            "Keys": "Vocals",
             "SixFretGuitar": "Guitar",
             "SixFretBass": "Bass",
             "SixFretRhythm": "Rhythm",
@@ -83,11 +83,11 @@
             "Year": "Year",
             "DateAdded": "Date Added",
             "Playable": "Playable Songs",
-            "FiveFretGuitar": "Guitar (5-Fret)",
-            "FiveFretBass": "Bass (5-Fret)",
-            "FiveFretRhythm": "Rhythm (5-Fret)",
+            "FiveFretGuitar": "Lead",
+            "FiveFretBass": "Bass",
+            "FiveFretRhythm": "Drums",
             "FiveFretCoop": "Co-op (5-Fret)",
-            "Keys": "Keys",
+            "Keys": "Vocals",
             "SixFretGuitar": "Guitar (6-Fret)",
             "SixFretBass": "Bass (6-Fret)",
             "SixFretRhythm": "Rhythm (6-Fret)",
@@ -220,7 +220,7 @@
             "AutoCalibrationScore": "Score saving disabled: Automatic calibration active.",
             "NoFailScore": "Score saving disabled: No fail toggle had to reset fail meter.",
             "ResumeAfterFailInvalidate": "Score saving disabled: Resuming after failure invalidated score.",
-            "ProfileCreated": "Profile created for new device: {0}\nTime to do some YARGin!",
+            "ProfileCreated": "Profile created for new device: {0}\nTime to play!",
             "TooManyPauses": "Score saving disabled: Too many pauses.",
             "UnsupportedDevice": "Automatic profile creation is not supported for {0}!"
         },
@@ -290,9 +290,9 @@
             "PlayWithReplay": "Play With Replay"
         },
         "Main": {
-            "MessageOfTheDay": "<align=center><size=32><b>Welcome to v0.15!</b></size></align>\n\nv0.15 is a major update that adds many highly requested and necessary gameplay features such as roll/trill lanes and Big \"YARG\" endings, as well as revamped user interface in the song selection and results screen, drum lane customization, automatic genre categorization, experimental custom vocalist characters in venues, and more.\n\n<b>If you have any feedback or find any bugs, please let us know on Discord or GitHub.</b>\n\nHappy YARGin'!",
+            "MessageOfTheDay": "<align=center><size=32><b>Welcome to LunarRhythm!</b></size></align>\n\nLunarRhythm is a pad based 5-fret rhythm game with lift notes, based on the YARG engine, and using online song hosting. You can play with a controller or keyboard! Have fun :)\n\n<b>If you have any feedback or find any bugs, please let me know on Discord.</b>",
             "Options": {
-                "Quickplay": "Quickplay",
+                "Quickplay": "Play",
                 "Practice": "Practice",
                 "Profiles": "Profiles",
                 "History": "History",
@@ -596,7 +596,7 @@
             "NewHighScore": "NEW HIGH SCORE",
             "NoteStreak": "{0:N0}-NOTE STREAK",
 			"PhraseStreak": "{0:N0}-PHRASE STREAK",
-            "StarPowerReady": "STAR POWER READY",
+            "StarPowerReady": "OVERDRIVE READY",
             "StrongFinish": "STRONG FINISH"
         },
         "Solo": {
@@ -826,7 +826,7 @@
         "Guitar": {
             "StrumUp": "Strum Up",
             "StrumDown": "Strum Down",
-            "StarPower": "Star Power",
+            "StarPower": "Overdrive",
             "Whammy": "Whammy"
         },
         "FourDrums": {
@@ -869,7 +869,7 @@
 			"FiveLaneOrangeCymbal": "5-Lane Orange Cymbal"
 		},
         "Vocals": {
-            "StarPower": "Star Power Activate",
+            "StarPower": "Overdrive Activate",
             "Hit": "Percussion Hit"
         },
         "FiveDrums": {
@@ -906,12 +906,12 @@
             "Key24": "Key 24 (B3)",
             "Key25": "Key 25 (C4)",
 			"OpenNote": "Five-Lane Open Note",
-			"GreenKey": "Five-Lane Green Key (First)",
-			"RedKey": "Five-Lane Red Key (Second)",
-			"YellowKey": "Five-Lane Yellow Key (Third)",
-			"BlueKey": "Five-Lane Blue Key (Fourth)",
-			"OrangeKey": "Five-Lane Orange Key (Fifth)",
-            "StarPower": "Star Power Activate",
+			"GreenKey": "Lane 1 (Green)",
+			"RedKey": "Lane 2 (Red)",
+			"YellowKey": "Lane 3 (Yellow)",
+			"BlueKey": "Lane 4 (Blue)",
+			"OrangeKey": "Lane 5 (Orange)",
+            "StarPower": "Overdrive Activate",
             "TouchEffects": "Touch Effects"
         }
     },
@@ -941,6 +941,7 @@
             "Cache": "Cache",
             "Venues": "Venues/Backgrounds",
             "Calibration": "Calibration",
+            "Leaderboards": "Leaderboards",
             "Input": "Input",
             "PresetSettings": "Preset Settings",
             "Debug": "Debug",
@@ -970,6 +971,8 @@
             "ExportSongsJson": "Ouvert (JSON)",
             "ExportSongsText": "Plain Text",
             "ExportSongsCsv": "CSV",
+            "SignInWithDiscord": "Sign In With Discord",
+            "SignOutOfLeaderboards": "Sign Out",
             "OpenCalibrator": "Open Calibrator",
             "OpenVenueFolder": "Open Backgrounds/Venue Folder",
             "AddFolder": "Add Folder",
@@ -1065,7 +1068,7 @@
             },
             "DiscordRichPresence": {
                 "Name": "Discord Rich Presence",
-                "Description": "Choose how YARG shows on your activity status on Discord.",
+                "Description": "Choose how LunarRhythm shows on your activity status on Discord.",
                 "Dropdown": {
                     "Show": "Show all details",
                     "Limited": "Show without the currently playing song",
@@ -1118,12 +1121,12 @@
                 "Description": "Adjusts the drum hit sound effect volume, which can be triggered before the first note, after the last note, or during drum fills/BREs."
             },
             "EnablePracticeSP": {
-                "Name": "Star Power in Practice",
-                "Description": "Allow Star Power phrases while in Practice Mode."
+                "Name": "Overdrive in Practice",
+                "Description": "Allow Overdrive phrases while in Practice Mode."
             },
             "FpsCap": {
                 "Name": "FPS Cap",
-                "Description": "The framerate cap. <color=white>YOU DO NOT NEED TO PLAY YARG ON 1000FPS.</color> VSync recommended."
+                "Description": "The framerate cap. <color=white>YOU DO NOT NEED TO PLAY LUNARRHYTHM ON 1000FPS.</color> VSync recommended."
             },
             "FpsStats": {
                 "Name": "Show FPS Counter",
@@ -1157,8 +1160,8 @@
                 "Description": "Enables and disables the graphical blue outline on the score box that displays the song's progress."
             },
             "GuitarVolume": {
-                "Name": "Guitar Volume",
-                "PauseName": "Guitar",
+                "Name": "Lead Volume",
+                "PauseName": "Lead",
                 "Description": "Adjusts the song's guitar track volume. Only does something if the song is multi-track."
             },
             "HighScoreInfo": {
@@ -1371,7 +1374,7 @@
             "SfxVolume": {
                 "Name": "SFX Volume",
                 "PauseName": "SFX",
-                "Description": "Adjusts the game's sound effect volume, such as when gaining a star, or activating Star Power."
+                "Description": "Adjusts the game's sound effect volume, such as when gaining a star, or activating Overdrive."
             },
             "ShowAdvancedMusicLibraryOptions": {
                 "Name": "Show Advanced Music Library Options",
@@ -1411,8 +1414,8 @@
                 "Description": "Enables sending Stage Kit lighting data to all connected devices capable of reading it."
             },
             "StarPowerHighwayFx": {
-                "Name": "Star Power Highway FX Mode",
-                "Description": "Disables visual elements on the highway which appear when Star Power is active.",
+                "Name": "Overdrive Highway FX Mode",
+                "Description": "Disables visual elements on the highway which appear when Overdrive is active.",
                 "Dropdown": {
                     "Off": "Off",
                     "On": "On",
@@ -1431,9 +1434,9 @@
                 "Name": "Use Full Directory For Playlists",
                 "Description": "Use full directory for the playlist sort option in the music library. <color=white>Rescan required if changed!</color>"
             },
-            "UseStarpowerFx": {
-                "Name": "Use Star Power SFX",
-                "Description": "If enabled, it will add reverb to stems where the player has Star Power enabled.",
+            "UseOverdriveFx": {
+                "Name": "Use Overdrive SFX",
+                "Description": "If enabled, it will add reverb to stems where the player has Overdrive enabled.",
                 "Dropdown": {
                     "MultitrackOnly": "Multitrack Only",
                     "Off": "Off",
@@ -1442,10 +1445,10 @@
             },
             "UseCrowdFx": {
                 "Name": "Use Crowd SFX",
-                "Description": "If enabled, crowd sounds will be played.\nIf set to Starpower Claps Only, crowd sounds will only be played during Starpower.",
+                "Description": "If enabled, crowd sounds will be played.\nIf set to Overdrive Claps Only, crowd sounds will only be played during Overdrive.",
                 "Dropdown": {
                     "Disabled": "Disabled",
-                    "StarpowerClapsOnly": "Starpower Claps Only",
+                    "OverdriveClapsOnly": "Overdrive Claps Only",
                     "Enabled": "Enabled"
                 }
             },
@@ -1526,8 +1529,8 @@
                 "Description": "Adjusts the song's vocal track volume. Only does something if the song is multi-track."
             },
             "VoiceActivatedVocalStarPower": {
-                "Name": "Voice Activated Star Power (Vocals)",
-                "Description": "If enabled, vocalists can activate their Star Power by making a noise. Keybinds can be used instead, regardless of this setting."
+                "Name": "Voice Activated Overdrive (Vocals)",
+                "Description": "If enabled, vocalists can activate their Overdrive by making a noise. Keybinds can be used instead, regardless of this setting."
             },
             "VSync": {
                 "Name": "Enable VSync",
@@ -1631,7 +1634,7 @@
             },
             "DMXUniverseChannel": {
                 "Name": "DMX Broadcast Universe",
-                "Description": "This is the universe that YARG will send the sACN packet to. Default is \"1\". Maximum is \"65535\"."
+                "Description": "This is the universe that LunarRhythm will send the sACN packet to. Default is \"1\". Maximum is \"65535\"."
             },
             "ReconnectProfiles": {
                 "Name": "Reconnect Profiles",
@@ -1643,7 +1646,7 @@
             },
             "DMXDimmerValues": {
                 "Name": "DMX Master Dimmer Values",
-                "Description": "These are the respective values that the Master Dimmer channels will be set to when YARG starts."
+                "Description": "These are the respective values that the Master Dimmer channels will be set to when LunarRhythm starts."
             },
             "UpcomingLyricsTime": {
                 "Name": "Upcoming Lyrics Lead Time",
@@ -1652,6 +1655,10 @@
             "WaitForSongVideo": {
                 "Name": "Wait For Song Videos When Seeking",
                 "Description": "Waits for a song-specific video background to finish seeking when restarting/changing sections in practice or seeking a replay."
+            },
+            "OverdriveHitsNotes": {
+                "Name": "Overdrive Hits Notes",
+                "Description": "Activating overdrive while no fret key is held also hits the note that's due, as in Festival."
             },
             "WrapAroundNavigation": {
                 "Name": "Wrap-Around Navigation",
@@ -1743,7 +1750,7 @@
                         "FiveFretGuitar": "Guitar (5-Fret)",
                         "FiveLaneDrums": "Drums (5-Lane)",
                         "FourLaneDrums": "Drums (4-Lane)",
-                        "ProKeys": "Pro Keys"
+                        "ProKeys": "Pad"
                     }
                 },
                 "ActivationNote": {
@@ -1761,20 +1768,20 @@
 				"BlueCymbalParticles": {
 					"Name": "Blue Cymbal Particles\n(split view only)"
 				},
-                "BlueCymbalStarpower": {
-                    "Name": "Blue Cymbal Star Power"
+                "BlueCymbalOverdrive": {
+                    "Name": "Blue Cymbal Overdrive"
                 },
                 "BlueCymbalActivationNote": {
-                    "Name": "Blue Cymbal Star Power\nActivation"
+                    "Name": "Blue Cymbal Overdrive\nActivation"
                 },
                 "BlueDrum": {
                     "Name": "Blue Drum"
                 },
-                "BlueDrumStarpower": {
-                    "Name": "Blue Drum Star Power"
+                "BlueDrumOverdrive": {
+                    "Name": "Blue Drum Overdrive"
                 },
                 "BluePadActivationNote": {
-                    "Name": "Blue Drum Star Power\nActivation"
+                    "Name": "Blue Drum Overdrive\nActivation"
                 },
                 "BlueFret": {
                     "Name": "Blue Fret"
@@ -1786,16 +1793,16 @@
                     "Name": "Blue Note"
                 },
                 "BlueNoteStarPower": {
-                    "Name": "Blue Note Star Power"
+                    "Name": "Blue Note Overdrive"
                 },
                 "BlueActivationNote": {
-                    "Name": "Blue Note Star Power\nActivation"
+                    "Name": "Blue Note Overdrive\nActivation"
                 },
                 "BlueParticles": {
                     "Name": "Blue Particles"
                 },
-                "BlueStarpower": {
-                    "Name": "Blue Star Power"
+                "BlueOverdrive": {
+                    "Name": "Blue Overdrive"
                 },
 				"DoubleKickFret": {
                     "Name": "Double Kick Fret\n(dedicated lane only)"
@@ -1809,11 +1816,11 @@
                 "DoubleKickParticles": {
                     "Name": "Double Kick Particles\n(dedicated lane only)"
                 },
-                "DoubleKickStarpower": {
-                    "Name": "Double Kick Star Power\n(dedicated lane only)"
+                "DoubleKickOverdrive": {
+                    "Name": "Double Kick Overdrive\n(dedicated lane only)"
                 },
                 "DoubleKickActivationNote": {
-                    "Name": "Double Kick Star Power\nActivation\n(dedicated lane only)"
+                    "Name": "Double Kick Overdrive\nActivation\n(dedicated lane only)"
                 },
                 "GreenCymbal": {
                     "Name": "Green Cymbal"
@@ -1827,20 +1834,20 @@
 				"GreenCymbalParticles": {
 					"Name": "Green Cymbal Particles\n(split view only)"
 				},
-                "GreenCymbalStarpower": {
-                    "Name": "Green Cymbal Star Power"
+                "GreenCymbalOverdrive": {
+                    "Name": "Green Cymbal Overdrive"
                 },
                 "GreenCymbalActivationNote": {
-                    "Name": "Green Cymbal Star Power\nActivation"
+                    "Name": "Green Cymbal Overdrive\nActivation"
                 },
                 "GreenDrum": {
                     "Name": "Green Drum"
                 },
-                "GreenDrumStarpower": {
-                    "Name": "Green Drum Star Power"
+                "GreenDrumOverdrive": {
+                    "Name": "Green Drum Overdrive"
                 },
                 "GreenPadActivationNote": {
-                    "Name": "Green Drum Star Power\nActivation"
+                    "Name": "Green Drum Overdrive\nActivation"
                 },
                 "GreenFret": {
                     "Name": "Green Fret"
@@ -1852,16 +1859,16 @@
                     "Name": "Green Note"
                 },
                 "GreenNoteStarPower": {
-                    "Name": "Green Note Star Power"
+                    "Name": "Green Note Overdrive"
                 },
                 "GreenActivationNote": {
-                    "Name": "Green Note Star Power\nActivation"
+                    "Name": "Green Note Overdrive\nActivation"
                 },
                 "GreenParticles": {
                     "Name": "Green Particles"
                 },
-                "GreenStarpower": {
-                    "Name": "Green Star Power"
+                "GreenOverdrive": {
+                    "Name": "Green Overdrive"
                 },
                 "KickFret": {
                     "Name": "Kick Fret"
@@ -1875,17 +1882,17 @@
                 "KickParticles": {
                     "Name": "Kick Particles"
                 },
-                "KickStarpower": {
-                    "Name": "Kick Star Power"
+                "KickOverdrive": {
+                    "Name": "Kick Overdrive"
                 },
                 "KickActivationNote": {
-                    "Name": "Kick Star Power\nActivation"
+                    "Name": "Kick Overdrive\nActivation"
                 },
                 "Metal": {
                     "Name": "Note Metal"
                 },
                 "MetalStarPower": {
-                    "Name": "Note Metal Star Power"
+                    "Name": "Note Metal Overdrive"
                 },
                 "Miss": {
                     "Name": "Missed Note"
@@ -1900,7 +1907,7 @@
                     "Name": "Open Note"
                 },
                 "OpenNoteStarPower": {
-                    "Name": "Open Note Star Power"
+                    "Name": "Open Note Overdrive"
                 },
                 "OpenParticles": {
                     "Name": "Open Particles"
@@ -1915,16 +1922,16 @@
                     "Name": "Orange Note"
                 },
                 "OrangeNoteStarPower": {
-                    "Name": "Orange Note Star Power"
+                    "Name": "Orange Note Overdrive"
                 },
                 "OrangeActivationNote": {
-                    "Name": "Orange Note Star Power\nActivation"
+                    "Name": "Orange Note Overdrive\nActivation"
                 },
                 "OrangeParticles": {
                     "Name": "Orange Particles"
                 },
-                "OrangeStarpower": {
-                    "Name": "Orange Star Power"
+                "OrangeOverdrive": {
+                    "Name": "Orange Overdrive"
                 },
                 "RedCymbal": {
                     "Name": "Red Cymbal"
@@ -1938,20 +1945,20 @@
 				"RedCymbalParticles": {
 					"Name": "Red Cymbal Particles\n(split view only)"
 				},
-                "RedCymbalStarpower": {
-                    "Name": "Red Cymbal Star Power"
+                "RedCymbalOverdrive": {
+                    "Name": "Red Cymbal Overdrive"
                 },
                 "RedCymbalActivationNote": {
-                    "Name": "Red Cymbal Star Power\nActivation"
+                    "Name": "Red Cymbal Overdrive\nActivation"
                 },
                 "RedDrum": {
                     "Name": "Red Drum"
                 },
-                "RedDrumStarpower": {
-                    "Name": "Red Drum Star Power"
+                "RedDrumOverdrive": {
+                    "Name": "Red Drum Overdrive"
                 },
                 "RedPadActivationNote": {
-                    "Name": "Red Drum Star Power\nActivation"
+                    "Name": "Red Drum Overdrive\nActivation"
                 },
                 "RedFret": {
                     "Name": "Red Fret"
@@ -1963,16 +1970,16 @@
                     "Name": "Red Note"
                 },
                 "RedNoteStarPower": {
-                    "Name": "Red Note Star Power"
+                    "Name": "Red Note Overdrive"
                 },
                 "RedActivationNote": {
-                    "Name": "Red Note Star Power\nActivation"
+                    "Name": "Red Note Overdrive\nActivation"
                 },
                 "RedParticles": {
                     "Name": "Red Particles"
                 },
-                "RedStarpower": {
-                    "Name": "Red Star Power"
+                "RedOverdrive": {
+                    "Name": "Red Overdrive"
                 },
                 "YellowCymbal": {
                     "Name": "Yellow Cymbal"
@@ -1986,20 +1993,20 @@
 				"YellowCymbalParticles": {
 					"Name": "Yellow Cymbal Particles\n(split view only)"
 				},
-                "YellowCymbalStarpower": {
-                    "Name": "Yellow Cymbal Star Power"
+                "YellowCymbalOverdrive": {
+                    "Name": "Yellow Cymbal Overdrive"
                 },
                 "YellowCymbalActivationNote": {
-                    "Name": "Yellow Cymbal Star Power\nActivation"
+                    "Name": "Yellow Cymbal Overdrive\nActivation"
                 },
                 "YellowDrum": {
                     "Name": "Yellow Drum"
                 },
-                "YellowDrumStarpower": {
-                    "Name": "Yellow Drum Star Power"
+                "YellowDrumOverdrive": {
+                    "Name": "Yellow Drum Overdrive"
                 },
                 "YellowPadActivationNote": {
-                    "Name": "Yellow Drum Star Power\nActivation"
+                    "Name": "Yellow Drum Overdrive\nActivation"
                 },
                 "YellowFret": {
                     "Name": "Yellow Fret"
@@ -2011,16 +2018,16 @@
                     "Name": "Yellow Note"
                 },
                 "YellowNoteStarPower": {
-                    "Name": "Yellow Note Star Power"
+                    "Name": "Yellow Note Overdrive"
                 },
                 "YellowActivationNote": {
-                    "Name": "Yellow Note Star Power\nActivation"
+                    "Name": "Yellow Note Overdrive\nActivation"
                 },
                 "YellowParticles": {
                     "Name": "Yellow Particles"
                 },
-                "YellowStarpower": {
-                    "Name": "Yellow Star Power"
+                "YellowOverdrive": {
+                    "Name": "Yellow Overdrive"
                 },
                 "WhiteKey": {
                     "Name": "White Key"
@@ -2062,10 +2069,10 @@
                     "Name": "Black Note"
                 },
                 "WhiteNoteStarPower": {
-                    "Name": "White Note Star Power"
+                    "Name": "White Note Overdrive"
                 },
                 "BlackNoteStarPower": {
-                    "Name": "Black Note Star Power"
+                    "Name": "Black Note Overdrive"
                 }
             },
             "EnginePreset": {
@@ -2075,7 +2082,7 @@
                         "Drums": "Drums",
                         "FiveFretGuitar": "Guitar",
                         "Vocals": "Vocals",
-                        "ProKeys": "Keys"
+                        "ProKeys": "Pad"
                     }
                 },
                 "DefaultEngines": {
@@ -2194,8 +2201,8 @@
                     "Description": "Allows solo buttons to tap notes during solos"
                 },
                 "NoStarPowerOverlap": {
-                    "Name": "No Star Power Overlap",
-                    "Description": "Disallows earning more Star Power while Star Power is already active."
+                    "Name": "No Overdrive Overlap",
+                    "Description": "Disallows earning more Overdrive while Overdrive is already active."
                 },
                 "EnableLanes": {
                     "Name": "Enable Trill/Tremolo Lanes",
@@ -2228,7 +2235,7 @@
                     "Name": "Groove Pattern Color"
                 },
                 "StarPowerColor": {
-                    "Name": "Star Power Color"
+                    "Name": "Overdrive Color"
                 },
                 "NoteHeight": {
                     "Name": "Note Height"
@@ -2264,8 +2271,8 @@
 					"Description": "This controls how much the Rock Meter recovers when hitting a note correctly. Higher values make the game easier."
                 },
 				"StarPowerEffectMultiplier": {
-                    "Name": "Star Power Multiplier",
-					"Description": "This controls how much the Rock Meter recovers when successfully hitting a note while Star Power is active. This has no effect on misses or overhits."
+                    "Name": "Overdrive Multiplier",
+					"Description": "This controls how much the Rock Meter recovers when successfully hitting a note while Overdrive is active. This has no effect on misses or overhits."
                 },
 				"VocalsMissDamageMultiplier": {
                     "Name": "Miss Damage Multiplier (Vocals)",

@@ -1,0 +1,623 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using YARG.Core.Chart;
+using YARG.Core.Input;
+using YARG.Core.Logging;
+using YARG.Core.Engine.Keys;
+
+namespace YARG.Core.Engine.Keys.Engines
+{
+    public class YargFiveLaneKeysEngine : FiveLaneKeysEngine
+    {
+        private KeyPressedTimes[] _keyPressedTimes = new KeyPressedTimes[7];
+
+        public YargFiveLaneKeysEngine(InstrumentDifficulty<GuitarNote> chart, SyncTrack syncTrack,
+            KeysEngineParameters engineParameters, bool isBot) : base(chart, syncTrack, engineParameters, isBot)
+        {
+        }
+
+        protected override void MutateStateWithInput(GameInput gameInput)
+        {
+            // These should always be null before inputs are processed
+            YargLogger.Assert(KeyHitThisUpdate == null, "KeyHitThisUpdate was not handled!");
+            YargLogger.Assert(KeyReleasedThisUpdate == null, "KeyReleasedThisUpdate was not handled!");
+
+            var action = gameInput.GetAction<ProKeysAction>();
+
+            if (!IsFiveLaneKeysAction(action))
+            {
+                return;
+            }
+            if (action is ProKeysAction.StarPower)
+            {
+                // Activating with no fret key down plays the note that's due, as in Festival
+                if (gameInput.Button && OverdriveHitsNotes && CanStarPowerActivate && !BaseStats.IsStarPowerActive
+                    && KeyMask == 0)
+                {
+                    _overdriveHitTime = gameInput.Time; // resolved by the hit logic, like a key press
+                }
+                else if (!gameInput.Button && OverdriveKeyMask != 0)
+                {
+                    ReleaseOverdriveKeys(gameInput.Time);
+                }
+                IsStarPowerInputActive = gameInput.Button;
+            }
+            else if (action is ProKeysAction.TouchEffects)
+            {
+                StartWhammyTimer(gameInput.Time);
+            }
+            else
+            {
+                var fiveLaneKeyIndex = (int)ProKeysActionToFiveLaneKeysAction(action);
+
+                if (gameInput.Button)
+                {
+                    // Presses only: a release used to land here too, which made a let-go key look freshly pressed
+                    KeyPressTimes[fiveLaneKeyIndex] = gameInput.Time;
+                    KeyHitThisUpdate = fiveLaneKeyIndex;
+                    _keyPressedTimes[fiveLaneKeyIndex].NoteIndex = NoteIndex;
+                    _keyPressedTimes[fiveLaneKeyIndex].Time = gameInput.Time;
+                    if (GetLaneMask(fiveLaneKeyIndex, out var mask))
+                    {
+                        SubmitLaneNote(mask);
+                    }
+                }
+                else
+                {
+                    KeyReleasedThisUpdate = fiveLaneKeyIndex;
+                    KeyReleaseTimes[fiveLaneKeyIndex] = gameInput.Time;
+                }
+
+                PreviousKeyMask = KeyMask;
+                ToggleKey(fiveLaneKeyIndex, gameInput.Button);
+
+                OnKeyStateChange?.Invoke(fiveLaneKeyIndex, gameInput.Button);
+            }
+        }
+
+        /// <summary>
+        /// When on, activating overdrive while no fret key is held also hits the note (or chord, or lift) that's in
+        /// its hit window right then. A player setting.
+        /// shortcut: not stored in replays, so a replay of a run that used it plays back without it; move it into
+        /// KeysEngineParameters if replays need to match.
+        /// </summary>
+        public bool OverdriveHitsNotes { get; set; }
+
+        private double? _overdriveHitTime;
+
+        private void HitDueNoteWithOverdrive(double time)
+        {
+            if (NoteIndex >= Notes.Count || !IsNoteInWindow(Notes[NoteIndex]))
+            {
+                return;
+            }
+
+            // Judge it by the activation, as if each key had moved right then
+            foreach (var note in Notes[NoteIndex].AllNotes)
+            {
+                int key = (int) note.FiveLaneKeysAction;
+                if (note.ParentOrSelf.IsLift)
+                {
+                    KeyReleaseTimes[key] = time;
+                }
+                else
+                {
+                    KeyPressTimes[key] = time;
+                    OverdriveKeyMask |= 1 << key; // held (for a sustain) until the overdrive key is let go
+                }
+            }
+            foreach (var note in Notes[NoteIndex].AllNotes)
+            {
+                HitNote(note);
+            }
+        }
+
+        // Letting go of the overdrive key lets go of the keys it pressed, and of a lift that's due right then
+        // (Festival lifts can sit on another lane than the sustain before them)
+        private void ReleaseOverdriveKeys(double time)
+        {
+            int mask = OverdriveKeyMask;
+            OverdriveKeyMask = 0;
+            if (NoteIndex < Notes.Count && Notes[NoteIndex].IsLift && IsNoteInWindow(Notes[NoteIndex]))
+            {
+                foreach (var note in Notes[NoteIndex].AllNotes)
+                {
+                    mask |= 1 << (int) note.FiveLaneKeysAction;
+                }
+            }
+            for (int key = 0; key < KeyReleaseTimes.Length; key++)
+            {
+                if ((mask & 1 << key) != 0 && (KeyMask & 1 << key) == 0)
+                {
+                    KeyReleaseTimes[key] = time;
+                }
+            }
+        }
+
+        protected override void UpdateHitLogic(double time)
+        {
+            // Update bot (will return if not enabled)
+            UpdateBot(time);
+
+            // This is here after UpdateBot gets called so that the bot gets coda keypress logic
+            if (IsCodaActive)
+            {
+                HandleCodaFretChange(time);
+            }
+
+            if (_overdriveHitTime is { } overdriveHit)
+            {
+                _overdriveHitTime = null;
+                HitDueNoteWithOverdrive(overdriveHit);
+            }
+
+            // Only check note logic if note index is within bounds
+            if (NoteIndex < Notes.Count)
+            {
+                CheckForNoteHit();
+            }
+
+            KeyHitThisUpdate = null;
+            KeyReleasedThisUpdate = null;
+            UpdateSustains();
+        }
+
+        protected override void CheckForNoteHit()
+        {
+            var parentNote = Notes[NoteIndex];
+
+            // Miss out the back end
+            if (!IsNoteInWindow(parentNote, out bool missed))
+            {
+                if (missed)
+                {
+                    // Intercept missed note while lane phrase is active
+                    if (!AutohitNoteFromLane(parentNote))
+                    {
+                        // If one of the notes in the chord was missed out the back end,
+                        // that means all of them would miss.
+                        foreach (var missedNote in parentNote.AllNotes)
+                        {
+                            MissNote(missedNote);
+                        }
+                    }
+                    else
+                    {
+                        // If the lane forgave the miss, we need to ensure the rest of the chord hits, too
+                        foreach (var missedNote in parentNote.AllNotes)
+                        {
+                            if (missedNote is { WasHit: false, WasMissed: false })
+                            {
+                                HitNote(missedNote);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                double hitWindow = EngineParameters.HitWindow.CalculateHitWindow(GetAverageNoteDistance(parentNote));
+                double frontEnd = EngineParameters.HitWindow.GetFrontEnd(hitWindow);
+                double backEnd = EngineParameters.HitWindow.GetBackEnd(hitWindow);
+
+                // Hit whole note
+                if (CanNoteBeHit(parentNote))
+                {
+                    foreach (var childNote in parentNote.AllNotes)
+                    {
+                        HitNote(childNote);
+                    }
+
+                    KeyHitThisUpdate = null;
+                }
+                else
+                {
+                    // Note cannot be hit in full, try to use chord staggering logic
+
+                    if (parentNote.IsChord && !parentNote.IsLift)
+                    {
+                        // Note is a chord and chord staggering was active and is now expired
+                        if (ChordStaggerTimer.IsActive && ChordStaggerTimer.IsExpired(CurrentTime))
+                        {
+                            YargLogger.LogFormatTrace("Ending chord staggering at {0}", CurrentTime);
+                            foreach (var note in parentNote.AllNotes)
+                            {
+                                // This key in the chord was pressed in time (held or not), so it can be hit
+                                if (IsKeyInTime(note, frontEnd))
+                                {
+                                    HitNote(note);
+                                    YargLogger.LogFormatTrace("Hit staggered note {0} in chord", (int)note.FiveLaneKeysAction);
+                                }
+                                else
+                                {
+                                    if (AutohitNoteFromLane(note))
+                                    {
+                                        YargLogger.LogFormatTrace("Forgiving chord staggering for note {0} due to lane phrase", (int)note.FiveLaneKeysAction);
+                                    }
+                                    else
+                                    {
+                                        YargLogger.LogFormatTrace("Missing note {0} due to chord staggering",
+                                            (int) note.FiveLaneKeysAction);
+                                        MissNote(note);
+                                    }
+                                }
+                            }
+
+                            ChordStaggerTimer.Disable(CurrentTime);
+                        }
+                        else
+                        {
+                            foreach (var note in parentNote.AllNotes)
+                            {
+                                // Go to next note if the key hit does not match the note's key
+                                if (KeyHitThisUpdate != (int)note.FiveLaneKeysAction)
+                                {
+                                    continue;
+                                }
+
+                                if (!ChordStaggerTimer.IsActive)
+                                {
+                                    StartTimer(ref ChordStaggerTimer, CurrentTime);
+                                    YargLogger.LogFormatTrace("Starting chord staggering at {0}. End time is {1}",
+                                        CurrentTime, ChordStaggerTimer.EndTime);
+
+                                    var chordStaggerEndTime = ChordStaggerTimer.EndTime;
+
+                                    double noteMissTime = note.Time + backEnd;
+
+                                    // Time has surpassed the back end of this note
+                                    if (chordStaggerEndTime > noteMissTime)
+                                    {
+                                        double diff = noteMissTime - chordStaggerEndTime;
+                                        StartTimer(ref ChordStaggerTimer, CurrentTime - Math.Abs(diff));
+
+                                        YargLogger.LogFormatTrace(
+                                            "Chord stagger window shortened by {0}. New end time is {1}. Note backend time is {2}",
+                                            diff, ChordStaggerTimer.EndTime, noteMissTime);
+                                    }
+                                }
+
+                                KeyHitThisUpdate = null;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If no note was hit but the user hit a key, then over hit
+            if (KeyHitThisUpdate != null)
+            {
+                Overhit(KeyHitThisUpdate.Value);
+                KeyHitThisUpdate = null;
+            }
+        }
+
+        protected override bool CanNoteBeHit(GuitarNote note)
+        {
+            double hitWindow = EngineParameters.HitWindow.CalculateHitWindow(GetAverageNoteDistance(note));
+            double frontEnd = EngineParameters.HitWindow.GetFrontEnd(hitWindow);
+
+            // shortcut: a chord counts as a lift chord when its parent is a lift; mixed lift/press chords
+            // are treated by the parent, upgrade if Festival charts turn out to mix them
+            if (note.ParentOrSelf.IsLift)
+            {
+                // Hit once every key of the lift has been let go inside its window, in any order and even if
+                // a key was already pressed again for the next note. A release made early (while an earlier note
+                // was still pending) still counts, and HitNote clears it so one release can't hit two lifts.
+                foreach (var childNote in note.AllNotes)
+                {
+                    if (KeyReleaseTimes[(int) childNote.FiveLaneKeysAction] <= note.Time + frontEnd)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // TODO: This is probably note correct for chords, but we shouldn't have chords in easy anyway
+            //  this will need to be fixed if we allow wildcard notes in other difficulties
+            if (note.Fret == (int) FiveFretGuitarFret.Wildcard && IsKeyInTime(note, frontEnd))
+            {
+                return true;
+            }
+
+            // Every key pressed inside the window, together or a little apart. They don't have to be held at once:
+            // on pads a chord is tapped, so the first key is often up again by the time the last one lands.
+            foreach (var childNote in note.AllNotes)
+            {
+                if (!IsKeyInTime(childNote, frontEnd))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        protected override void UpdateBot(double time)
+        {
+            float botNoteHoldTime = 0.166f;
+            GuitarNote? note = null;
+            int keysInSustain = 0;
+
+            if (!IsBot)
+            {
+                return;
+            }
+
+            IsStarPowerInputActive = CanStarPowerActivate && !IsStarPowerInputActive;
+
+            if (NoteIndex < Notes.Count)
+            {
+                note = Notes[NoteIndex];
+            }
+
+            // Find the active sustains
+            foreach (var sustain in ActiveSustains)
+            {
+                keysInSustain |= 1 << (int)sustain.Note.FiveLaneKeysAction;
+            }
+
+            // Release no longer needed keys
+            int key = 0;
+            for (var mask = KeyMask; mask > 0; mask >>= 1)
+            {
+                // Keys are not released if they are part of an active sustain
+                // or were pressed less than botNoteHoldTime in the past,
+                // unless the key is going to be pressed again this update
+                // or it is the next key to be pressed and half of the time
+                // between press and next press has already elapsed or another
+                // key is being pressed this update
+                bool keyProtected = false;
+                bool currentKey;
+
+                if (note is not null)
+                {
+                    currentKey = time >= note.Time && (int)note.FiveLaneKeysAction == key;
+                }
+                else
+                {
+                    currentKey = false;
+                }
+
+                if (!currentKey)
+                {
+                    if ((keysInSustain & 1 << key) != 0)
+                    {
+                        keyProtected = true;
+                    }
+                    else if (_keyPressedTimes[key].Time > time - botNoteHoldTime)
+                    {
+                        keyProtected = true;
+
+                        // Release the key if the next note is on this key and
+                        // half of the time between press and the next note has elapsed
+                        if (note is not null)
+                        {
+                            // Despite the name chordNote, this also applies to single notes
+                            foreach (var chordNote in note.AllNotes)
+                            {
+                                if ((int)chordNote.FiveLaneKeysAction == key && chordNote.Time - time < time - _keyPressedTimes[key].Time)
+                                {
+                                    keyProtected = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // if the key isn't protected due to a sustain and another note is being played, release the key
+                    if (note is not null && (keysInSustain & 1 << key) == 0 && time >= note.Time)
+                    {
+                        keyProtected = false;
+                    }
+                }
+
+                if ((mask & 1) == 1 && (!keyProtected || currentKey))
+                {
+                    var pressedNote = Notes[_keyPressedTimes[key].NoteIndex];
+
+                    // We loop to ensure that all notes in a chord are released at the same time
+                    foreach (var chordNote in pressedNote.AllNotes)
+                    {
+                        if ((keysInSustain & 1 << (int)chordNote.FiveLaneKeysAction) == 0)
+                        {
+                            var action = FiveLaneKeysActionToProKeysAction(chordNote.FiveLaneKeysAction);
+                            MutateStateWithInput(new GameInput(time, (int)action, false));
+                            // Nothing else is going to reset this for a bot, so we have to do it
+                            KeyReleasedThisUpdate = null;
+                        }
+                    }
+                }
+
+                key++;
+            }
+
+
+            if (NoteIndex >= Notes.Count)
+            {
+                // Nothing left to press
+                return;
+            }
+
+            if (time < note!.Time)
+            {
+                // It isn't time to press another key yet
+                return;
+            }
+
+            if (note.IsLift)
+            {
+                // Hold every key of the lift first, then let go of them all; the last release hits it
+                foreach (var chordNote in note.AllNotes)
+                {
+                    if (!IsKeyHeld(chordNote.FiveLaneKeysAction))
+                    {
+                        var action = FiveLaneKeysActionToProKeysAction(chordNote.FiveLaneKeysAction);
+                        MutateStateWithInput(new GameInput(note.Time, (int) action, true));
+                        CheckForNoteHit();
+                    }
+                }
+
+                foreach (var chordNote in note.AllNotes)
+                {
+                    var action = FiveLaneKeysActionToProKeysAction(chordNote.FiveLaneKeysAction);
+                    MutateStateWithInput(new GameInput(note.Time, (int) action, false));
+                    if (NoteIndex < Notes.Count)
+                    {
+                        CheckForNoteHit();
+                    }
+                    KeyReleasedThisUpdate = null;
+                }
+                return;
+            }
+
+            // Press keys for current note
+            foreach (var chordNote in note.AllNotes)
+            {
+                // Need to translate back to an actual Pro Keys Action for the GameInput
+                var action = FiveLaneKeysActionToProKeysAction(chordNote.FiveLaneKeysAction);
+
+                MutateStateWithInput(new GameInput(note.Time, (int)action, true));
+                HandleCodaFretChange(time);
+                CheckForNoteHit();
+            }
+        }
+
+        private void HandleCodaFretChange(double time)
+        {
+            if (!IsCodaActive || !KeyHitThisUpdate.HasValue)
+            {
+                return;
+            }
+
+            var coda = Codas[CurrentCodaIndex];
+
+            // Figure out which keys changed
+            var pressed = 1 << KeyHitThisUpdate.Value;
+
+
+            // Hit the lane for any that were pressed
+            for (int i = 0; i < (int)FiveLaneKeysAction.Wildcard; i++)
+            {
+                int button = 1 << i;
+                if ((pressed & button) != 0)
+                {
+                    coda.HitLane(time, i);
+                }
+            }
+        }
+
+        protected bool GetLaneMask(int fiveLaneKeyIndex, out int mask)
+        {
+            mask = 0;
+
+            if (!IsLaneActive)
+            {
+                return false;
+            }
+
+            // Mask has green = 1, 5LK actions are green = 0
+            var fretMask = 1 << (fiveLaneKeyIndex);
+
+            if (MaskIsMultiFret(RequiredLaneNote))
+            {
+                // We don't directly check for mask equaling the current input mask because that would allow cheesing
+                // If the current fret satisfies one of the bits in the lane, we check KeyPressTimes to determine whether
+                // the other frets in the lane's mask have been pressed within ChordStaggerWindow
+                if ((fretMask & RequiredLaneNote) > 0)
+                {
+                    mask = fretMask;
+
+                    for (int i = 0; i < KeyPressTimes.Length; i++)
+                    {
+                        // + 1 is for mask/index/action offset
+                        var keyMask = 1 << i + 1;
+                        var pressedTime = KeyPressTimes[i];
+                        if ((keyMask & RequiredLaneNote) > 0 &&
+                            pressedTime >= CurrentTime - EngineParameters.ChordStaggerWindow)
+                        {
+                            mask |= keyMask;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                mask = fretMask;
+            }
+
+            return true;
+        }
+
+        protected override bool ActiveLaneIncludesNote(int fiveLaneKeyIndex)
+        {
+            if (!IsLaneActive)
+            {
+                return false;
+            }
+
+            // Mask has green = 1, 5LK actions are green = 0
+            var fretMask = 1 << (fiveLaneKeyIndex);
+
+            if ((fretMask & RequiredLaneNote) > 0 || (NextTrillNote != -1 && fretMask == NextTrillNote))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        protected override List<CodaSection> GetCodaSections()
+        {
+            var codaSections = new List<CodaSection>();
+
+            foreach (var phrase in Chart.Phrases)
+            {
+                if (phrase.Type != PhraseType.BigRockEnding)
+                {
+                    continue;
+                }
+
+                codaSections.Add(new CodaSection(6, phrase.Time, phrase.TimeEnd));
+            }
+
+            return codaSections;
+        }
+
+        private static ProKeysAction FiveLaneKeysActionToProKeysAction(FiveLaneKeysAction fiveLaneKeysAction)
+        {
+            return fiveLaneKeysAction switch
+            {
+                FiveLaneKeysAction.OpenNote => ProKeysAction.OpenNote,
+                FiveLaneKeysAction.GreenKey => ProKeysAction.GreenKey,
+                FiveLaneKeysAction.RedKey => ProKeysAction.RedKey,
+                FiveLaneKeysAction.YellowKey => ProKeysAction.YellowKey,
+                FiveLaneKeysAction.BlueKey => ProKeysAction.BlueKey,
+                FiveLaneKeysAction.OrangeKey => ProKeysAction.OrangeKey,
+                FiveLaneKeysAction.Wildcard => ProKeysAction.OpenNote, // Doesn't actually matter what action we use here
+                _ => throw new Exception("Unhandled.")
+            };
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsFiveLaneKeysAction(ProKeysAction action)
+        {
+            return (ALLOWED_FIVE_LANE_KEYS_ACTIONS & (1L << (int) action)) != 0;
+        }
+
+        // ProKeysAction.OrangeKey is 32, which causes issues if we use a plain 32-bit int for the mask
+        private const long ALLOWED_FIVE_LANE_KEYS_ACTIONS =
+            1L << (int) ProKeysAction.GreenKey |
+            1L << (int) ProKeysAction.RedKey |
+            1L << (int) ProKeysAction.YellowKey |
+            1L << (int) ProKeysAction.BlueKey |
+            1L << (int) ProKeysAction.OrangeKey |
+            1L << (int) ProKeysAction.OpenNote |
+            1L << (int) ProKeysAction.StarPower |
+            1L << (int) ProKeysAction.TouchEffects;
+    }
+}

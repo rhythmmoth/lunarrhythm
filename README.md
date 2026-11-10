@@ -1,238 +1,149 @@
-<p align="center">
-  <picture>
-    <img alt="YARG Gameplay" src="./Images/Banner.png" width="100%">
-  </picture>
-</p>
+# LunarRhythm
 
-<p align="center">
-    <i>YARG (a.k.a. Yet Another Rhythm Game)</i>
-</p>
+LunarRhythm is a pad rhythm game, built as a fork of [YARG](https://github.com/YARC-Official/YARG) (Yet Another Rhythm
+Game). It plays Festival-style songs on keyboard or controller: five lanes, four parts (Lead, Bass, Drums, Vocals),
+lifts, Overdrive and Festival scoring. Songs come from an online song list, with online leaderboards.
 
-<p align="center">
-  <a href="https://discord.gg/sqpu4R552r">
-    <img src="./Images/Socials/Discord.png" height="38px" width="38px" alt="Discord">
-  </a>
-  <a href="https://youtube.com/@yarggame">
-    <img src="./Images/Socials/YouTube.png" height="38px" width="38px" alt="YouTube">
-  </a>
-  <a href="https://twitter.com/YARGGame">
-    <img src="./Images/Socials/Twitter.png" width="38px" height="38px" alt="Twitter">
-  </a>
-  <a href="https://bsky.app/yarg.in">
-    <img src="./Images/Socials/Bsky.png" height="38px" width="38px" alt="Bsky">
-  </a>
-  <a href="https://instagram.com/yarg.game">
-    <img src="./Images/Socials/Instagram.png" height="38px" width="38px" alt="Instagram">
-  </a>
-  <a href="https://reddit.com/r/yarg">
-    <img src="./Images/Socials/Reddit.png" height="38px" width="38px" alt="Reddit">
-  </a>
-  <a href="https://tiktok.com/@yarggame">
-    <img src="./Images/Socials/TikTok.png" height="38px" width="38px" alt="TikTok">
-  </a>
-</p>
-
----
-
-YARG (a.k.a. Yet Another Rhythm Game) is a free, open-source, plastic guitar game that is still in development. It supports guitar (five fret), drums (plastic or e-kit), vocals, pro-guitar, and more! YARG is still in active development, so there may be bugs and missing features.
-
-## 👉 Disclaimer
+This repository is the game's source code, published as YARG's license (LGPL-3.0) requires. The servers it talks to
+(song list, file hosting and leaderboards) are not part of it, and neither are any songs.
 
 > [!IMPORTANT]
-> **YARG stands firmly against all forms of piracy.** We neither support nor endorse piracy, as it is a violation of copyright law with serious legal consequences. Our platform's importable content—designed for creators to share their work and for educational purposes—does not justify or excuse piracy.
->
-> YARG itself **does not** use any ripped/pirated assets or music and never will. By using YARG, users agree not to promote or endorse piracy in any way through our platform. Upholding these principles ensures a community that respects copyright, creativity, and legal standards.
->
-> YARG stands for "Yet Another Rhythm Game" and NOT for pirates.
+> LunarRhythm doesn't support piracy. It ships no copyrighted music or charts; play only songs you have the
+> rights to. All charts on the online database are strictly custom made charts and are NOT licensed for this game.
 
-## 📃 Table of Contents
+## Changes from YARG
 
-- [👉 Disclaimer](#-disclaimer)
-- [📃 Table of Contents](#-table-of-contents)
-- [📥 Downloading and Playing](#-downloading-and-playing)
-  - [YARC Launcher (All Platforms)](#yarc-launcher-all-platforms)
-  - [Linux](#linux)
-- [🔨 Building/Contributing](#-buildingcontributing)
-  - [Setup Instructions](#setup-instructions)
-  - [Unity YAML Merge Tool](#unity-yaml-merge-tool)
-- [✍️ Contributing and Credits](#️-contributing-and-credits)
-- [🛡️ License](#️-license)
-- [🧰 External Licenses](#-external-licenses)
-- [📦 External Assets and Libraries](#-external-assets-and-libraries)
-- [💸 Donate](#-donate)
+LunarRhythm is a modified version of YARG and YARG.Core. The main changes, and where they are:
 
-## 📥 Downloading and Playing
+- **Festival songs** (`YARG.Core/YARG.Core/Song/Entries/Ini/FestivalSong.cs`):
+  - Song folders with `info.json` and `notes.mid` are read as Festival songs.
+  - The four pad parts (`PART GUITAR`, `PART BASS`, `PART DRUMS`, `PART VOCALS`) are converted in memory to YARG's
+    five-lane parts.
+  - Lift markers become lift notes, and chords that mix lifts and presses are split.
+  - Solo markers are moved to the note YARG reads.
+  - Track names are moved to tick 0, where the scanner reads them.
+  - Lyrics are read from LRC files.
+- **Festival engine** (`YARG.Core/YARG.Core/Engine/Keys/FiveLaneKeys/`):
+  - Timing is Perfect (36 points) or Good (24).
+  - The multiplier goes up every 10 notes, to 4×, or 6× on bass and vocals.
+  - Sustains score 12 points per beat (25 on Keys).
+  - Solos give no bonus (`BaseEngine.Generic.cs`).
+  - With the "Overdrive hits notes" setting, the Overdrive key also hits notes, sustains and lifts.
+- **Online songs** (`YARG.Core/YARG.Core/Song/Online/OnlineSongs.cs`, `Assets/Script/Song/SongContainer.cs`):
+  - The song list is downloaded at startup.
+  - Covers and lyrics are saved; charts and audio stay in memory only.
+  - Files are fetched through short-lived signed links, which only signed-in players get.
+  - Builds only play online songs. Local songs are an editor-only debug option.
+- **Leaderboards** (`YARG.Core/YARG.Core/Song/Online/Leaderboards.cs`, `Assets/Script/Menu/MusicLibrary/LeaderboardCard.cs`,
+  `Assets/Script/Settings/Metadata/PreviewBuilders/LeaderboardAccountPanelBuilder.cs`):
+  - Sign in with Discord from the settings; only your Discord name and avatar are read.
+  - The session token is stored encrypted for your Windows account.
+  - Runs are sent with the chart's hash and checked by the server.
+  - Runs that fail to send are queued and retried.
+  - Each song in the library shows its board.
+- **Gameplay and menus** (`Assets/Script/Gameplay`, `Assets/Script/Menu`):
+  - All four parts play on a five-lane pad track.
+  - The solo box shows no bonus step.
+  - A news line on the title screen (`Menu/Main/NewsTicker.cs`).
+  - Menus and default bindings are reworked for the pad game.
 
-**It is recommended you download YARG via the [YARC Launcher](https://github.com/YARC-Official/YARC-Launcher/releases/).** Downloading the portable option is not recommended as some features may not work.
+YARG's own history is in the [YARG](https://github.com/YARC-Official/YARG) and
+[YARG.Core](https://github.com/YARC-Official/YARG.Core) repositories.
 
-### YARC Launcher (All Platforms)
+## Building
 
-> [!IMPORTANT]
-> If you are on Linux, there are some additional things you need to do in order for controllers to work. See the Linux section for more info.
+You need:
 
-1. Go to the YARC Launcher releases page, [here](https://github.com/YARC-Official/YARC-Launcher/releases/).
-2. Click on the download option for your operating system.
-3. You may get a "this application is not safe" warning depending on your operating system. This is a false positive. [Click here](https://github.com/YARC-Official/YARC-Launcher#-antivirus-warnings) to learn more.
-4. Once in the launcher, click on "YARG" on the left hand side.
-5. Then, click on green "Update Stable" button.
-6. You will be prompted to choose an install folder. If you don't know what folder to choose, just click "Okay". Please ensure that the folder you select is empty.
-7. Wait for it to finish installing...
-8. Finally, press "Play Stable"!
-9. Additionally, if you want some songs, install "YARG Setlist" which is also on the left in the YARC Launcher.
+- Unity **6000.3.5f2** (Unity Hub will offer it when you add the project)
+- the [.NET SDK](https://dotnet.microsoft.com/download) (the SDK, not just the runtime)
+- [Git LFS](https://git-lfs.com) and [Blender](https://www.blender.org/) (Unity uses it to import models)
 
-### Linux
+Then:
 
-There are some dependencies that will be needed in order for HID devices (such as PS3 and Wii instruments) to work.
+1. Clone the repository, then run `git lfs pull`. YARG.Core is included as a folder, not a submodule.
+2. Add the folder in Unity Hub and open it. If Unity asks about Safe Mode, choose **Ignore**.
+3. If packages are missing, run **NuGet → Restore Packages** from the menu bar.
+4. Build from **File → Build Profiles** as usual.
 
-1. Install `hidapi` and `libudev`:
-   - (Package names may differ depending on package repositories.)
-   - On apt-based distros (such as Ubuntu or Debian), use `sudo apt install libhidapi-hidraw0 libudev1`.
-   - On pacman-based distros (such as Arch Linux), use `pacman -S hidapi systemd-libs`.
-   - On Fedora, use `dnf install hidapi systemd-libs`.
-2. Finally, create a new udev rules file called `69-hid.rules` inside of `/etc/udev/rules.d/` or `/usr/lib/udev/rules.d/`, with the following contents:
-  ```
-  KERNEL=="hidraw*", TAG+="uaccess"
-  ```
-  - Without this file, YARG will not be able to access HID devices without special permissions such as being run with `sudo`, which is not recommended.
-  - The file name may differ if desired, but it must come before `73-seat-late.rules`!
-3. Reboot your system to apply the new udev rule, then you should be all good to go!
+YARG's own build notes (Linux controller setup, the Unity YAML merge tool) apply here too: see the
+[YARG README](https://github.com/YARC-Official/YARG#readme).
 
-For improved compatibility when using the XBOX 360 Wireless Adapter with Linux, create a new udev rules file called `99-yarg-libusb.rules` inside of `/etc/udev/rules.d/` or `/usr/lib/udev/rules.d/`, with the following contents:
+## Running your own servers
+
+Out of the box the game points at placeholder addresses (`example.com`), so online songs and leaderboards won't work
+until you set up your own:
+
+| What | Where |
+| --- | --- |
+| Song list address, and which hosts get the API key | `DATABASE_URL` and `KEY_DOMAIN` in `YARG.Core/YARG.Core/Song/Online/OnlineSongs.cs` |
+| Leaderboard server address | `BASE_URL` in `YARG.Core/YARG.Core/Song/Online/Leaderboards.cs` |
+| API key the game sends | `Assets/Resources/OnlineApiKey.txt` (one line; git-ignored, so never commit it) |
+
+`OnlineSongs.cs` and `Leaderboards.cs` show the request and response formats the game expects.
+
+## Testing with local songs
+
+Builds only play online songs. In the Unity editor, turn on **LunarRhythm → Load Local Songs (debug)** and put song
+folders in a `songs` folder next to the executable (in the editor, that's the project folder). A Festival song folder
+looks like this:
 
 ```
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="0291", MODE="0666"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02a9", MODE="0666"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="0719", MODE="0666"
+My Song/
+  info.json      title, artist, album, release_year, charter, genre, length, diff, preview_start_time
+  notes.mid      PART GUITAR, PART BASS, PART DRUMS, PART VOCALS (track names at tick 0)
+  lead.ogg  bass.ogg  drums.ogg  vocals.ogg  backing.ogg
+  album.png      cover (optional)
+  lyrics.txt     LRC lyrics (optional)
 ```
 
-## 🔨 Building/Contributing
+Regular YARG song folders (`song.ini` with `notes.mid` or `notes.chart`) still load too.
 
-> [!IMPORTANT]
-> #### ⚠️ If you wish to contribute, use the `dev` branch. Your PR will NOT be merged if it's on `master`. ⚠️
+## Tests
 
-### Setup Instructions
+```
+dotnet test YARG.Core/YARG.Core.UnitTests
+```
 
-> [!WARNING]
->
-> If you would like to build the game yourself, please follow these instructions.
->
-> If you don't follow these instructions, it is possible that **YOU WILL NOT BE ABLE TO RUN THE GAME**.
+## License
 
-1. If you are planning to contribute, first make a fork of the project.
-   - Be sure to *uncheck* the option to only include the `master` branch! You will not be able to set things up correctly otherwise, as the `dev` branch will not be included in your fork.
+LunarRhythm is licensed, like YARG, under the
+[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html) or later; see
+[`LICENSE`](LICENSE). It's based on the work of the YARG team and its
+[contributors](https://github.com/YARC-Official/Contributors), and isn't made or endorsed by them.
 
-   ![](Images/Contributing/Include_All_Branches.png)
+### External licenses
 
-2. Make sure you have the latest version of [Blender](https://www.blender.org/) installed. This is for loading models, even if you don't plan on editing them.
-3. Clone the repository. If you are not familiar with git, [GitHub Desktop](https://desktop.github.com/) or [Visual Studio Code](https://code.visualstudio.com/) plus the [GitLens extension](https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens) are both good GUI options. If, however, you want to use the command-line:
-   1. Download [Git](https://git-scm.com/downloads). Be sure it is added to system path.
-   2. Also download [Git LFS](https://git-lfs.com), and install it with the `git lfs install` command.
-   3. Open the command prompt in the directory you want to store the repository.
-   4. Clone the project repository:
-   5. Type in `git clone -b dev --recursive <repository url>.git`, replacing `<repository url>` with either:
-      - your fork's URL if you made one, or
-      - the main repository's URL (`https://github.com/YARC-Official/YARG`) if you just want to build the game.
-      - A complete example using the main repository's URL is `git clone -b dev --recursive https://github.com/YARC-Official/YARG.git`.
-   6. Assets are stored in LFS, if you receive an error that assets can not be loaded or assets are missing, you may need to change into the YARG directory and retrieve assets from LFS by typing in `git lfs fetch` followed by `git lfs checkout` to use them when things get updated.
-   7. Because YARG contains submodules, you may need to do `git submodule update` when things get updated.
-4. Install Unity 6000.3.5f2. Easiest method will be using Unity Hub:
-   1. Download and install [Unity Hub](https://unity.com/download).
-   2. Sign-in/create an account with a personal license (free).
-   3. In Unity Hub, hit the arrow next to Add and select `Add project from disk`, then select the folder you cloned YARG to.
-   4. Click on the added entry for YARG. It will warn you about a missing editor version, select 6000.3.5f2 and install it.
-      - Unselect Visual Studio in the list of modules if you wish to use another editor or already have it installed.
-5. Install the [.NET SDK](https://dotnet.microsoft.com/en-us/download/visual-studio-sdks). This is required to develop the submodules and their supporting projects.
-   - You will need the SDK specifically, not the runtime!
-6. Open the project in Unity. When prompted about Safe Mode, click "Ignore".
-   - Do *not* enter Safe Mode, otherwise scripts necessary to build/install dependencies will not run, and the errors will not resolve.
-
-   ![](Images/Contributing/unityignore.png)
-
-7. Click on `NuGet` on the top menu bar, then click on `Restore Packages`.
-   - This should be performed automatically when Unity starts up, but it can be performend manually if needed.
-8. You're ready to go!
-
-### Unity YAML Merge Tool
-
-Sometimes merge conflicts may happen between Unity scenes. These can be much more difficult to resolve than other merge conflicts, so we recommend using the Unity YAML merge tool to resolve these instead of attempting to do so manually.
-
-Setup:
-1. Open a command prompt to the repository (on VS Code you can do Terminal > New Terminal)
-2. Type in `git config --local --edit`
-3. In the file that gets opened, go to the bottom and paste this in:
-  ```
-  [merge]
-      tool = unityyamlmerge
-  [mergetool "unityyamlmerge"]
-      trustExitCode = false
-      cmd = 'C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.5f2\\Editor\\Data\\Tools\\UnityYAMLMerge.exe' merge -p "$BASE" "$REMOTE" "$LOCAL" "$MERGED"
-  ```
-  - You may need to change the file path depending on where you installed Unity to.
-4. Save and close the file.
-
-Resolving conflicts:
-1. Start the merge/cherry-pick which is causing conflicts.
-2. If the conflict doesn't resolve automatically, open the command prompt and use `git merge-tool`.
-3. Verify that the conflict was resolved correctly, then commit/continue the merge.
-
-## ✍️ Contributing and Credits
-
-If you want to contribute, please feel free! It's recommended you join [our Discord](https://discord.gg/sqpu4R552r) so we can provide feedback quickly.
-
-In order to get your name added to the YARG credits, you need to first contribute to any of the following:
-* YARG
-* The Official Setlist and/or DLC
-* YARC Launcher
-* OpenSource
-* The community (community moderator, socials manager, etc).
-
-After that, you must create a pull request on [this repo](https://github.com/YARC-Official/Contributors) to get your name added. If you need help with this, feel free to ask in our Discord!
-
-## 🛡️ License
-
-YARG is licensed under the [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html) (or later) - see the [`LICENSE`](LICENSE) file for details.
-
-## 🧰 External Licenses
-
-Some libraries/assets are **packaged** with the source code have licenses that must be included.
+Libraries and assets packaged with the source code:
 
 | Library | License |
 | --- | --- |
-| [NuGet for Unity](https://github.com/GlitchEnzo/NuGetForUnity) | [MIT](https://github.com/GlitchEnzo/NuGetForUnity/blob/master/LICENSE)
-| [Unity Standalone File Browser](https://github.com/gkngkc/UnityStandaloneFileBrowser) | [MIT](https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt)
-| [Discord GameSDK](https://discord.com/developers/docs/game-sdk/sdk-starter-guide) | Licenseless
-| [Lucide](https://lucide.dev/) | [ISC](https://lucide.dev/license)
-| [Unbounded](https://fonts.google.com/specimen/Unbounded), [Barlow](https://fonts.google.com/specimen/Barlow), [Noto Sans Japanese](https://fonts.google.com/noto/specimen/Noto+Sans+JP) and [Red Hat Display](https://fonts.google.com/specimen/Red+Hat+Display) | [Open Font License](https://scripts.sil.org/cms/scripts/page.php?site_id=nrsi&id=OFL)
-| [PolyHaven](https://polyhaven.com/) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
-| [BASS](https://www.un4seen.com/) | [Proprietary](https://www.un4seen.com/) (free for non-commercial use)
+| [NuGet for Unity](https://github.com/GlitchEnzo/NuGetForUnity) | [MIT](https://github.com/GlitchEnzo/NuGetForUnity/blob/master/LICENSE) |
+| [Unity Standalone File Browser](https://github.com/gkngkc/UnityStandaloneFileBrowser) | [MIT](https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt) |
+| [Discord GameSDK](https://discord.com/developers/docs/game-sdk/sdk-starter-guide) | Licenseless |
+| [Lucide](https://lucide.dev/) | [ISC](https://lucide.dev/license) |
+| [Unbounded](https://fonts.google.com/specimen/Unbounded), [Barlow](https://fonts.google.com/specimen/Barlow), [Noto Sans Japanese](https://fonts.google.com/noto/specimen/Noto+Sans+JP) and [Red Hat Display](https://fonts.google.com/specimen/Red+Hat+Display) | [Open Font License](https://scripts.sil.org/cms/scripts/page.php?site_id=nrsi&id=OFL) |
+| [PolyHaven](https://polyhaven.com/) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| [BASS](https://www.un4seen.com/) | [Proprietary](https://www.un4seen.com/) (free for non-commercial use) |
 | [Haukcode.sACN](https://github.com/HakanL/Haukcode.sACN) | [MIT](https://github.com/HakanL/Haukcode.sACN/blob/master/LICENSE) |
-| [aperitif chatter.wav by soundslikewillem](https://freesound.org/s/449550/)|[Attribution NonCommercial 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
-| [Crowd after Encore.wav by soundslikewillem](https://freesound.org/s/193064/)|[Attribution NonCommercial 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+| [aperitif chatter.wav by soundslikewillem](https://freesound.org/s/449550/) | [Attribution NonCommercial 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
+| [Crowd after Encore.wav by soundslikewillem](https://freesound.org/s/193064/) | [Attribution NonCommercial 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
 
-Please note that other libraries are **not** directly packaged within the source code, and are to be installed by NuGet, Unity's packaged manager, or via a Git submodule.
-
-## 📦 External Assets and Libraries
-
-These are assets that are installed by NuGet, Unity's packaged manager, or via a Git submodule. These have varying licenses, but can all be downloaded/accessed by the links given.
+### Libraries installed by NuGet, Unity's package manager or a submodule
 
 | Link | Type | Use |
 | --- | --- | --- |
-| [YARG.Core](https://github.com/YARC-Official/YARG.Core) | Library | Provides most of YARG's backend (engine, replays, etc.)
-| [PlasticBand](https://github.com/TheNathannator/PlasticBand) | Reference | Controller Support Info
-| [GuitarGame_ChartFormats](https://github.com/TheNathannator/GuitarGame_ChartFormats) | Reference | File Format Documentation
-| [PlasticBand-Unity](https://github.com/TheNathannator/PlasticBand-Unity) | Library | GH/RB Controller Support
-| [HIDrogen](https://github.com/TheNathannator/HIDrogen) | Library | Linux HID Controller Support
-| [EasySharpIni](https://www.nuget.org/packages/EasySharpIni/) | Library | Parsing `song.ini` Files
-| [DryWetMidi](https://www.nuget.org/packages/Melanchall.DryWetMidi) | Library | Parsing `.mid` Files
-| [Minis](https://github.com/keijiro/Minis/tree/master) | Library | MIDI Input for Unity
-| [DOTween](https://github.com/Demigiant/dotween) | Library | Animation Utility
-| [UniTask](https://github.com/Cysharp/UniTask) | Library | Async Library
-| [unity-toolbar-extender](https://github.com/marijnz/unity-toolbar-extender/) | Library | Unity Editor Utility
-| [SoftMaskForUGUI](https://github.com/mob-sakai/SoftMaskForUGUI) | Library | UI Utility
-| [Unity-Dependencies-Hunter](https://github.com/AlexeyPerov/Unity-Dependencies-Hunter) | Library | Unity Editor Utility
-| [tmpro-dynamic-data-cleaner](https://github.com/STARasGAMES/tmpro-dynamic-data-cleaner) | Library | Prevent Git Change Spam
-| [openvat-unity](https://github.com/sharpen3d/openvat-unity.git) | Library | OpenVAT (Vertex Animated Textures) Support
-
-## 💸 Donate
-
-Some people have expressed interest in donating. This is an open-source project and therefore donating is not required. If you do want to still help out, spread the word or contribute!
+| [YARG.Core](https://github.com/YARC-Official/YARG.Core) | Library | Most of the game's backend (engine, replays, song scanning); included here with LunarRhythm's changes |
+| [PlasticBand](https://github.com/TheNathannator/PlasticBand) | Reference | Controller support info |
+| [GuitarGame_ChartFormats](https://github.com/TheNathannator/GuitarGame_ChartFormats) | Reference | File format documentation |
+| [PlasticBand-Unity](https://github.com/TheNathannator/PlasticBand-Unity) | Library | GH/RB controller support |
+| [HIDrogen](https://github.com/TheNathannator/HIDrogen) | Library | Linux HID controller support |
+| [EasySharpIni](https://www.nuget.org/packages/EasySharpIni/) | Library | Parsing `song.ini` files |
+| [DryWetMidi](https://www.nuget.org/packages/Melanchall.DryWetMidi) | Library | Parsing `.mid` files |
+| [Minis](https://github.com/keijiro/Minis/tree/master) | Library | MIDI input for Unity |
+| [DOTween](https://github.com/Demigiant/dotween) | Library | Animation |
+| [UniTask](https://github.com/Cysharp/UniTask) | Library | Async |
+| [unity-toolbar-extender](https://github.com/marijnz/unity-toolbar-extender/) | Library | Unity editor utility |
+| [SoftMaskForUGUI](https://github.com/mob-sakai/SoftMaskForUGUI) | Library | UI utility |
+| [Unity-Dependencies-Hunter](https://github.com/AlexeyPerov/Unity-Dependencies-Hunter) | Library | Unity editor utility |
+| [tmpro-dynamic-data-cleaner](https://github.com/STARasGAMES/tmpro-dynamic-data-cleaner) | Library | Prevents git change spam |
+| [openvat-unity](https://github.com/sharpen3d/openvat-unity.git) | Library | Vertex animated textures |

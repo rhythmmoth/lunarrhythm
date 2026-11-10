@@ -128,63 +128,6 @@ namespace YARG.Menu.MusicLibrary
                 gameObject.SetActive(false);
             });
 
-            if (_musicLibrary.MenuState != MenuState.PlaylistSelect)
-            {
-                CreateItem("SortBy", _musicLibrary.GetPopupSortLabel(), () =>
-                {
-                    _menuState = State.SortSelect;
-                    UpdateForState();
-                });
-            }
-
-            if (_musicLibrary.MenuState != MenuState.Playlist &&
-                _musicLibrary.MenuState != MenuState.PlaylistSelect &&
-                _musicLibrary.HasSortHeaders)
-            {
-                CreateItem("GoToSection", () =>
-                {
-                    _menuState = State.GoToSection;
-                    UpdateForState();
-                });
-            }
-
-            if (_musicLibrary.MenuState == MenuState.Library && !_musicLibrary.PlaylistMode)
-            {
-                bool hasCollapsed = false;
-                bool hasExpanded = false;
-                foreach (var section in _musicLibrary.SortedSongs)
-                {
-                    if (section.Collapsed)
-                    {
-                        hasCollapsed = true;
-                    }
-                    else
-                    {
-                        hasExpanded = true;
-                    }
-
-                    if (hasCollapsed && hasExpanded) break;
-                }
-
-                if (hasCollapsed)
-                {
-                    CreateItem("ExpandAll", () =>
-                    {
-                        _musicLibrary.ExpandAll();
-                        gameObject.SetActive(false);
-                    });
-                }
-
-                if (hasExpanded)
-                {
-                    CreateItem("CollapseAll", () =>
-                    {
-                        _musicLibrary.CollapseAll();
-                        gameObject.SetActive(false);
-                    });
-                }
-            }
-
             var viewType = _musicLibrary.CurrentSelection;
 
             // Add/remove to favorites
@@ -242,13 +185,6 @@ namespace YARG.Menu.MusicLibrary
 
                     if (isSetlist)
                         AddRemoveFromPlaylistItem();
-
-                    // Show "Add to Playlist" even when editing a playlist.
-                    CreateItem("AddToPlaylist", () =>
-                    {
-                        _menuState = State.AddToPlaylist;
-                        UpdateForState();
-                    });
 
                     // Show "Remove from Playlist" if we're editing a playlist
                     if (isInPlaylist && !isSetlist)
@@ -367,8 +303,8 @@ namespace YARG.Menu.MusicLibrary
 
             foreach (var sort in EnumExtensions<SortAttribute>.Values)
             {
-                // Skip theses because they don't make sense
-                if (sort == SortAttribute.Unspecified)
+                // Skip theses because they don't make sense (source is the same for every pad game song)
+                if (sort is SortAttribute.Unspecified or SortAttribute.Source)
                 {
                     continue;
                 }

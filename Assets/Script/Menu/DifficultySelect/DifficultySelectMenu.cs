@@ -151,8 +151,7 @@ namespace YARG.Menu.DifficultySelect
             _loadingPhrase.text = RichTextUtils.StripRichTextTags(
                 GlobalVariables.State.CurrentSong.LoadingPhrase, RichTextTags.BadTags);
 
-            _sourceIcon.sprite = SongSources.SourceToIcon(GlobalVariables.State.CurrentSong.Source);
-            _sourceIcon.gameObject.SetActive(_sourceIcon.sprite != null);
+            _sourceIcon.gameObject.SetActive(false); // no source icons in the pad game
 
 
             _scrollbar = GetComponentInChildren<Scrollbar>();
@@ -190,7 +189,7 @@ namespace YARG.Menu.DifficultySelect
         {
             // Set player text
             var profile = CurrentPlayer.Profile;
-            _text.text = $"<sprite name=\"{profile.GameMode.ToResourceName()}\"> {profile.Name}";
+            _text.text = profile.Name;
 
             // Reset content
             _navGroup.ClearNavigatables();
@@ -632,6 +631,12 @@ namespace YARG.Menu.DifficultySelect
             // Get the possible difficulties for the player's instrument in the song
             foreach (var difficulty in EnumExtensions<Difficulty>.Values)
             {
+                // Festival has no Beginner
+                if (difficulty == Difficulty.Beginner)
+                {
+                    continue;
+                }
+
                 bool invalidDifficulty = false;
                 foreach (var showsong in _songList)
                 {

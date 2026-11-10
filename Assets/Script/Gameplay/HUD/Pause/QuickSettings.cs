@@ -67,7 +67,8 @@ namespace YARG.Gameplay.HUD
 
             _quickSettingsContainer.gameObject.SetActive(true);
             _subSettingsObject.SetActive(false);
-            // _noFailButton.SetActive(!SettingsManager.Settings.NoFailMode.Value);
+            // No fail is always on
+            _noFailButton.SetActive(false);
             _noFailText.text = SettingsManager.Settings.NoFail.Value != NoFailMode.Off ? "Disable No Fail" : "Enable No Fail";
             _venuePostProcessingText.text = SettingsManager.Settings.VenuePostProcessing.Value
                 ? "Disable Venue Post Processing"

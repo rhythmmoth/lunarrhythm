@@ -6,9 +6,13 @@ using Newtonsoft.Json;
 using UnityEngine;
 using YARG.Core.Logging;
 using YARG.Core.Utility;
+using YARG.Gameplay.HUD;
 using YARG.Helpers;
+using YARG.Integration;
+using YARG.Playback;
 using YARG.Settings.Metadata;
 using YARG.Settings.Types;
+using YARG.Song;
 
 namespace YARG.Settings
 {
@@ -28,8 +32,12 @@ namespace YARG.Settings
 
         public static readonly List<Tab> DisplayedSettingsTabs = new()
         {
-            new MetadataTab("General", icon: "Engine")
+            new MetadataTab("General", icon: "Engine", new LeaderboardAccountPanelBuilder())
             {
+                new HeaderMetadata("Leaderboards"),
+                new ButtonRowMetadata(nameof(Settings.SignInWithDiscord)) { Visible = () => !YARG.Core.Song.Leaderboards.SignedIn },
+                new ButtonRowMetadata(nameof(Settings.SignOutOfLeaderboards)) { Visible = () => YARG.Core.Song.Leaderboards.SignedIn },
+
                 new HeaderMetadata("Calibration"),
                 new ButtonRowMetadata(nameof(Settings.OpenCalibrator)),
                 nameof(Settings.AudioCalibration),
@@ -38,27 +46,15 @@ namespace YARG.Settings
 
                 new HeaderMetadata("Venues"),
                 new ButtonRowMetadata(nameof(Settings.OpenVenueFolder)),
-                new FieldMetadata(nameof(Settings.DisableDefaultBackground), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.DisableGlobalBackgrounds), isAdvanced: true),
                 nameof(Settings.DisablePerSongBackgrounds),
                 new FieldMetadata(nameof(Settings.WaitForSongVideo), isAdvanced: true),
 
                 new HeaderMetadata("Gameplay"),
+                nameof(Settings.OverdriveHitsNotes),
                 new FieldMetadata(nameof(Settings.InputPollingFrequency), isAdvanced: true),
-                nameof(Settings.VoiceActivatedVocalStarPower),
                 new FieldMetadata(nameof(Settings.EnablePracticeSP), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.PracticeRestartDelay), isAdvanced: true),
-                nameof(Settings.NoFail),
-                nameof(Settings.LearningGuides),
-                new FieldMetadata(nameof(Settings.ReduceNoteSpeedByDifficulty)),
-
-                new HeaderMetadata("StatusBar"),
-                nameof(Settings.ShowBattery),
-                nameof(Settings.ShowTime),
-                new FieldMetadata(nameof(Settings.MemoryStats), isAdvanced: true),
-                new FieldMetadata(nameof(Settings.FpsStats), isAdvanced: true),
-                new FieldMetadata(nameof(Settings.ShowActivePlayers)),
-                new FieldMetadata(nameof(Settings.ShowActiveBots), isAdvanced: true),
 
                 new HeaderMetadata("Other"),
                 nameof(Settings.ReconnectProfiles),
@@ -68,15 +64,10 @@ namespace YARG.Settings
                 nameof(Settings.PauseOnFocusLoss),
                 nameof(Settings.MuteOnFocusLoss),
                 nameof(Settings.WrapAroundNavigation),
-                nameof(Settings.DiscordRichPresence),
                 new FieldMetadata(nameof(Settings.AmIAwesome), isAdvanced: true),
             },
-            new SongManagerTab("SongManager", icon: "Songs")
+            new MetadataTab("SongManager", icon: "Songs")
             {
-                new HeaderMetadata("ScanningOptions"),
-                nameof(Settings.AllowDuplicateSongs),
-                nameof(Settings.UseFullDirectoryForPlaylists),
-                nameof(Settings.Genrelizer),
                 new HeaderMetadata("MusicLibrary"),
                 nameof(Settings.MaxSongRating),
                 nameof(Settings.ShowFavoriteButton),
@@ -84,9 +75,6 @@ namespace YARG.Settings
                 nameof(Settings.HighScoreInfo),
                 new FieldMetadata(nameof(Settings.ShowPercentDecimals), isAdvanced: true),
                 nameof(Settings.HighScoreHistory),
-                new HeaderMetadata("PlayAShow"),
-                nameof(Settings.PlayAShowTimeout),
-                nameof(Settings.RequireAllDifficulties),
             },
             new MetadataTab("Sound", icon: "Sound")
             {
@@ -100,24 +88,17 @@ namespace YARG.Settings
                 nameof(Settings.DrumsVolume),
                 nameof(Settings.VocalsVolume),
                 new FieldMetadata(nameof(Settings.SongVolume), isAdvanced: true),
-                new FieldMetadata(nameof(Settings.CrowdVolume), isAdvanced: true),
                 nameof(Settings.SfxVolume),
                 new FieldMetadata(nameof(Settings.DrumSfxVolume), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.PreviewVolume), isAdvanced: true),
                 nameof(Settings.MusicPlayerVolume),
-                new FieldMetadata(nameof(Settings.VocalMonitoring)),
                 new FieldMetadata(nameof(Settings.MetronomeVolume), isAdvanced: true),
 
                 new HeaderMetadata("Customization", isAdvanced: true),
                 new FieldMetadata(nameof(Settings.PlaybackBufferLength), isAdvanced: true),
 
-                new HeaderMetadata("Input"),
-                nameof(Settings.MicrophoneSensitivity),
-
                 new HeaderMetadata("Gameplay"),
                 nameof(Settings.MuteOnMiss),
-                nameof(Settings.UseStarpowerFx),
-                nameof(Settings.UseCrowdFx),
                 nameof(Settings.OverstrumAndOverhitSoundEffects),
                 new FieldMetadata(nameof(Settings.AlwaysOnDrumSFX), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.UseWhammyFx), isAdvanced: true),
@@ -126,7 +107,6 @@ namespace YARG.Settings
                 new HeaderMetadata("Other"),
                 new FieldMetadata(nameof(Settings.UseChipmunkSpeed), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.ApplyVolumesInMusicLibrary), isAdvanced: true),
-                nameof(Settings.EnableVoxSamples),
                 new FieldMetadata(nameof(Settings.MetronomeSound), isAdvanced: true),
             },
             new MetadataTab("Graphics", icon: "Display", new TrackPreviewBuilder())
@@ -151,7 +131,6 @@ namespace YARG.Settings
                 nameof(Settings.ReduceFlashingLights),
 
                 new HeaderMetadata("Gameplay"),
-                nameof(Settings.StaticVocalsMode),
                 new FieldMetadata(nameof(Settings.UseThreeLaneLyricsInHarmony), isAdvanced: true),
                 nameof(Settings.EnableTrackEffects),
                 nameof(Settings.EnableHighwayAnimation),
@@ -277,6 +256,25 @@ namespace YARG.Settings
 
             // If null, recreate
             Settings ??= new SettingContainer();
+
+            // Pad game: no crowd audio and no Discord presence, whatever an older settings file says
+            Settings.UseCrowdFx.SetValueWithoutNotify(CrowdFxMode.Disabled);
+            Settings.DiscordRichPresence.SetValueWithoutNotify(DiscordRichPresenceMode.Hide);
+
+            // Options removed from the menus for a simpler game: pin them so an older settings file can't keep them on
+            Settings.NoFail.SetValueWithoutNotify(NoFailMode.NoMeter);
+            Settings.ReduceNoteSpeedByDifficulty.SetValueWithoutNotify(false);
+            Settings.LearningGuides.SetValueWithoutNotify(false);
+            Settings.StaticVocalsMode.SetValueWithoutNotify(false);
+            Settings.EnableVoxSamples.SetValueWithoutNotify(true);
+            Settings.ShowRecommendedSongs.SetValueWithoutNotify(false);
+            Settings.ShowBattery.SetValueWithoutNotify(false);
+            Settings.ShowTime.SetValueWithoutNotify(false);
+            Settings.MemoryStats.SetValueWithoutNotify(false);
+            Settings.ShowActivePlayers.SetValueWithoutNotify(false);
+            Settings.ShowActiveBots.SetValueWithoutNotify(false);
+            Settings.LibrarySort = SortAttribute.Name;
+
             SettingContainer.IsInitialized = true;
 
             // Now that we're done loading, call all of the callbacks

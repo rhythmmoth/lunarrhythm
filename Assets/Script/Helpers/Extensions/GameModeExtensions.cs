@@ -37,21 +37,14 @@ namespace YARG.Helpers.Extensions
         public static List<(string setting, string? overrideText)> PossibleProfileSettings(
             this GameMode gameMode, Dictionary<string, object> dependencyNamesAndValues)
         {
-            List<(string setting, string? overrideText)> unconditionallyValidInAllModes = new()
-            {
-                (ProfileSettingStrings.INSTRUMENT_SELECT, null),
-                (ProfileSettingStrings.ENGINE_PRESET, null),
-                (ProfileSettingStrings.ROCK_METER_PRESET, null),
-                (ProfileSettingStrings.INPUT_CALIBRATION, null),
-            };
+            // LunarRhythm: game mode, engine/rock meter/camera presets, note theme and input calibration (set in Settings)
+            // aren't offered per profile
+            List<(string setting, string? overrideText)> unconditionallyValidInAllModes = new();
 
             List<(string setting, string? overrideText)> unconditionallyValidInAllModesExceptVocals = new()
             {
-                (ProfileSettingStrings.THEME_SELECT, null),
                 (ProfileSettingStrings.COLOR_PROFILE_SELECT, null),
-                (ProfileSettingStrings.CAMERA_PRESET, null),
                 (ProfileSettingStrings.HIGHWAY_PRESET, null),
-                (ProfileSettingStrings.INPUT_CALIBRATION, null),
                 (ProfileSettingStrings.NOTE_SPEED_AND_HIGHWAY_LENGTH, null),
             };
 
@@ -89,11 +82,6 @@ namespace YARG.Helpers.Extensions
                 {
                     (ProfileSettingStrings.LEFTY_FLIP, null),
                     (ProfileSettingStrings.RANGE_DISABLE, "5-LANE RANGE SHIFT MARKERS"),
-                },
-                GameMode.ProKeys => new()
-                {
-                    (ProfileSettingStrings.RANGE_DISABLE, "5-LANE RANGE SHIFT MARKERS"),
-                    (ProfileSettingStrings.OPEN_LANE_DISPLAY_TYPE, "DEDICATED OPEN NOTE LANE"),
                 },
                 _ => new()
             };

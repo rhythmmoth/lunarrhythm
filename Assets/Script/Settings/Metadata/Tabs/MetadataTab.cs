@@ -34,10 +34,15 @@ namespace YARG.Settings.Metadata
             var showAdvanced = SettingsMenu.Instance.ShowAdvanced;
             var settingIndex = 0;
 
+            var shown = _settings.FindAll(s => (showAdvanced || !s.IsAdvanced) &&
+                (s is not ButtonRowMetadata { Visible: { } visible } || visible()));
+
             // Once we've found the tab, add the settings
-            foreach (var settingMetadata in _settings)
+            for (int i = 0; i < shown.Count; i++)
             {
-                if (settingMetadata.IsAdvanced && !showAdvanced)
+                var settingMetadata = shown[i];
+                // A header with nothing under it (e.g. only advanced settings, while those are hidden)
+                if (settingMetadata is HeaderMetadata && (i + 1 == shown.Count || shown[i + 1] is HeaderMetadata))
                 {
                     continue;
                 }

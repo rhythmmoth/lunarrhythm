@@ -7,6 +7,7 @@ using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
 using UniHumanoid;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.Animations;
 using UnityEngine.UI;
 using UnityEngine.Video;
@@ -177,6 +178,7 @@ namespace YARG.Gameplay
             using var result = VenueLoader.GetVenue(GameManager.Song, out _source);
             if (result == null)
             {
+                ShowMenuBackground();
                 return;
             }
 
@@ -285,6 +287,31 @@ namespace YARG.Gameplay
                     Destroy(songTex);
                     return;
             }
+        }
+
+        // No song or venue background: show the animated menu background, rendered like a venue
+        private void ShowMenuBackground()
+        {
+            var prefab = Addressables.LoadAssetAsync<GameObject>("MenuBackground").WaitForCompletion();
+            var background = Instantiate(prefab);
+
+            // The menu's light and post-processing volume would also affect the highway, and the wall shader is unlit
+            foreach (var light in background.GetComponentsInChildren<Light>(true))
+            {
+                Destroy(light.gameObject);
+            }
+            foreach (var volume in background.GetComponentsInChildren<UnityEngine.Rendering.Volume>(true))
+            {
+                Destroy(volume.gameObject);
+            }
+            foreach (var listener in background.GetComponentsInChildren<AudioListener>(true))
+            {
+                Destroy(listener);
+            }
+
+            SetLayer(background, LayerMask.NameToLayer("Venue"));
+            background.GetComponentInChildren<Camera>().gameObject.AddComponent<VenueCameraRenderer>();
+            ShowVenue();
         }
 
         private void ShowVenue()

@@ -342,7 +342,11 @@ namespace YARG.Player
                 }
                 else
                 {
-                    YargLogger.LogWarning("Failed to load profiles! Bindings loading will be skipped.");
+                    // Both files are unreadable (e.g. zeroed by a power cut). Keep a copy and start fresh,
+                    // otherwise the game can never save profiles again.
+                    YargLogger.LogWarning("Failed to load profiles! Starting with no profiles; the old file is kept as .corrupt.");
+                    File.Copy(profilesPath, profilesPath + ".corrupt", true);
+                    _isInitialized = true;
                     return 0;
                 }
             }
@@ -384,7 +388,8 @@ namespace YARG.Player
             string profilesJson = File.ReadAllText(ProfilesBackupPath);
             try
             {
-                return JsonConvert.DeserializeObject<List<YargProfile>>(profilesJson);
+                // A blank or zeroed file deserializes to null rather than throwing
+                return JsonConvert.DeserializeObject<List<YargProfile>>(profilesJson) ?? new List<YargProfile>();
             }
             catch (Exception e)
             {
@@ -582,43 +587,14 @@ namespace YARG.Player
                 return false;
             }
 
-            GameMode gameMode = default;
-            string profileName = string.Empty;
-
-            if (device is FiveFretGuitar)
+            // Pad game: only gamepads get a profile automatically (keyboards are bound by hand)
+            if (device is not Gamepad)
             {
-                gameMode = GameMode.FiveFretGuitar;
-                profileName = "New Guitar Profile";
-            }
-            else if (device is FourLaneDrumkit)
-            {
-                gameMode = GameMode.FourLaneDrums;
-                profileName = "New Drums Profile";
-            }
-            else if (device is FiveLaneDrumkit)
-            {
-                gameMode = GameMode.FiveLaneDrums;
-                profileName = "New Drums Profile";
-            }
-            else if (device is ProKeyboard)
-            {
-                gameMode = GameMode.ProKeys;
-                profileName = "New Keys Profile";
-            }
-            else
-            {
-                // Filter out keyboard and mouse devices for the purposes of this message, otherwise we're just
-                // making noise about nothing for most players
-                if (device is Keyboard or Mouse or Pen)
-                {
-                    return false;
-                }
-
-                // TODO: Figure out why this triggers for non-input devices like stage kits so we can enable this
-                // var failMessage = Localize.KeyFormat("Menu.Toast.UnsupportedDevice", device.displayName);
-                // ToastManager.ToastWarning(failMessage);
                 return false;
             }
+
+            var gameMode = GameMode.ProKeys;
+            string profileName = "New Pad Profile";
 
             var newProfile = new YargProfile
             {
