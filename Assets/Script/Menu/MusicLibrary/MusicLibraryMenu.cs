@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -126,9 +126,35 @@ namespace YARG.Menu.MusicLibrary
         }
 
 
+        private TMPro.TextMeshProUGUI _subtitle;
+
+        /// <summary>The selected song's cover, for the song options popup.</summary>
+        internal Texture CurrentCover => _sidebar.CoverTexture;
+
+        /// <summary>
+        /// The list first centres its rows before the Moonlight layout has resized its view; centre again once the
+        /// layout has settled, so the first row starts at the panel's top like the board's.
+        /// </summary>
+        private async Cysharp.Threading.Tasks.UniTaskVoid RealignAfterLayout()
+        {
+            await Cysharp.Threading.Tasks.UniTask.Yield(Cysharp.Threading.Tasks.PlayerLoopTiming.PostLateUpdate);
+            if (this != null && isActiveAndEnabled && ViewList.Count > 0)
+            {
+                Canvas.ForceUpdateCanvases(); // UI layout otherwise settles only when the canvas next renders
+                RefreshViewsObjects();
+            }
+        }
+
         protected override void Awake()
         {
+            // Before the list sets up: it sizes its rows to the view this changes
+            _subtitle = LibraryMoonlight.StyleMenu(transform);
             base.Awake();
+            // The pooled rows wake later, with the menu; give them the board's height now, before the list centres them
+            foreach (var row in GetComponentsInChildren<SongView>(true))
+            {
+                ((RectTransform) row.transform).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 72f);
+            }
 
             // Initialize sidebar
             _sidebar.Initialize(this, _searchField);
@@ -152,6 +178,8 @@ namespace YARG.Menu.MusicLibrary
 
             // Hack to ensure that crowd samples are stopped no matter what
             GlobalAudioHandler.StopAllSfxChannels();
+
+            RealignAfterLayout().Forget();
 
             // Set navigation scheme
             SetNavigationScheme();
@@ -318,6 +346,7 @@ namespace YARG.Menu.MusicLibrary
                         {
                             SetWrapAroundState(!ctx.IsRepeat);
                             SelectedIndex--;
+                            SkipHeads(-1);
                         }
                     }),
                 new NavigationScheme.Entry(MenuAction.Down, "Menu.Common.Down",
@@ -331,6 +360,7 @@ namespace YARG.Menu.MusicLibrary
                         {
                             SetWrapAroundState(!ctx.IsRepeat);
                             SelectedIndex++;
+                            SkipHeads(1);
                         }
                     }),
                 leftEntry,
@@ -342,26 +372,26 @@ namespace YARG.Menu.MusicLibrary
                         () => CurrentSelection?.PrimaryButtonClick(),
                         hide: true
                     ) :
+                    // Moonlight footer: A Play, B Back, Y Jump to section (or Start the set), X Song options
                     new NavigationScheme.Entry(
                         MenuAction.Green,
                         setListNotEmpty ?
-                            "Menu.MusicLibrary.AddHoldStartSet" :
-                            "Menu.MusicLibrary.PlayHoldAddToSet",
+                            "Menu.MusicLibrary.AddToSet" :
+                            "Menu.MusicLibrary.Footer.Play",
                         OnGreenTap,
                         holdSeconds: GREEN_HOLD_SECONDS,
-                        onHoldHandler: OnGreenHold,
-                        hide: true
+                        onHoldHandler: OnGreenHold
                     ),
-                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", Back, hide: true),
-                new NavigationScheme.Entry(MenuAction.Blue, "Menu.MusicLibrary.Filters", OpenFilters),
-                new NavigationScheme.Entry(MenuAction.Orange, "Menu.MusicLibrary.MoreOptions",
-                    OnOrangeHit, OnOrangeRelease),
+                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", Back),
+                setListNotEmpty
+                    ? new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist)
+                    : new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.SkipSection", GoToNextSection),
+                new NavigationScheme.Entry(MenuAction.Blue, "Menu.MusicLibrary.Footer.SongOptions",
+                    () => _popupMenu.gameObject.SetActive(true)),
+                // Not on the bar: a tap opens the filters, holding it with up/down jumps between sections
+                new NavigationScheme.Entry(MenuAction.Orange, "Menu.MusicLibrary.Filters",
+                    OnOrangeHit, OnOrangeRelease, hide: true),
             };
-            if (setListNotEmpty)
-            {
-                entries.Insert(entries.Count - 2,
-                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist));
-            }
 
             Navigator.Instance.PushScheme(new NavigationScheme(entries, false));
 
@@ -458,26 +488,90 @@ namespace YARG.Menu.MusicLibrary
                 }
             }
 
-            // One flat list in title order, no section headers
+            // The running season's songs go only under its header; featured songs get a header and stay in the list
+            var now = OnlineSongs.ServerNow; // the server's clock: the PC's date can't move a season
+            var season = OnlineSongs.Season;
+            var featured = OnlineSongs.Featured;
+            var seasonSongs = new List<SongEntry>();
+            var featuredSongs = new List<SongEntry>();
             foreach (var section in _sortedSongs)
             {
                 foreach (var song in section.Songs)
                 {
                     if (!allowdupes && song.IsDuplicate) continue;
-
-                    var songView = new SongViewType(this, song);
-                    list.Add(songView);
-                    var starAmount = songView.GetStarAmount();
-                    if (starAmount is not null)
-                    {
-                        _totalStarCount += starAmount.Value.GetStarCount();
-                    }
+                    if (OnlineSongs.SeasonOf(song.ActualLocation, now) > 0) seasonSongs.Add(song);
+                    if (OnlineSongs.IsFeatured(song.ActualLocation)) featuredSongs.Add(song);
                 }
+            }
+            bool headers = seasonSongs.Count > 0 || featuredSongs.Count > 0;
+
+            if (seasonSongs.Count > 0)
+            {
+                string name = season.Name.Trim();
+                list.Add(new SortHeaderViewType($"Season {season.Number}" + (name.Length > 0 ? " · " + name : ""),
+                    seasonSongs.Count, null, seasonSongs.ToArray())
+                {
+                    Tint = Moonlight.Season,
+                    Note = SeasonNote(season.End - now),
+                });
+                foreach (var song in seasonSongs) AddSong(list, song, true);
+            }
+            if (featuredSongs.Count > 0)
+            {
+                // In the order the panel lists them
+                featuredSongs.Sort((a, b) => IndexIn(featured, a).CompareTo(IndexIn(featured, b)));
+                list.Add(new SortHeaderViewType("Featured", featuredSongs.Count, null, featuredSongs.ToArray())
+                {
+                    Tint = Moonlight.Featured,
+                    Note = featured.Note,
+                });
+                foreach (var song in featuredSongs) AddSong(list, song, false); // counted in the main list
+            }
+
+            // The main list in title order: one flat list, with its letter heads once the headers above are there
+            var inSeason = new HashSet<SongEntry>(seasonSongs);
+            foreach (var section in _sortedSongs)
+            {
+                var songs = section.Songs.Where(song => (allowdupes || !song.IsDuplicate) && !inSeason.Contains(song)).ToArray();
+                if (songs.Length == 0) continue;
+                if (headers)
+                {
+                    list.Add(new SortHeaderViewType(section.Category, songs.Length, null, songs));
+                }
+                foreach (var song in songs) AddSong(list, song, true);
             }
 
             _totalSongCount = songCount;
             CalculateCategoryHeaderIndices(list);
             return list;
+        }
+
+        private void AddSong(List<ViewType> list, SongEntry song, bool countStars)
+        {
+            var songView = new SongViewType(this, song);
+            list.Add(songView);
+            if (countStars && songView.GetStarAmount() is { } starAmount)
+            {
+                _totalStarCount += starAmount.GetStarCount();
+            }
+        }
+
+        private static int IndexIn(OnlineSongs.FeaturedInfo featured, SongEntry song)
+        {
+            int index = -1;
+            var name = OnlineSongs.ShortnameOf(song.ActualLocation);
+            for (int i = 0; i < featured.Songs.Count && index < 0; i++)
+            {
+                if (featured.Songs[i] == name) index = i;
+            }
+            return index;
+        }
+
+        /// <summary>"Ends in 23 days", down to "Last day" in the final 24 hours.</summary>
+        internal static string SeasonNote(TimeSpan left)
+        {
+            int days = (int) Math.Ceiling(left.TotalDays);
+            return days <= 1 ? "Last day" : $"Ends in {days} days";
         }
 
         private void ExitLibrary()
@@ -797,7 +891,7 @@ namespace YARG.Menu.MusicLibrary
             var holdContext = _heldInputs.FirstOrDefault(i => i.Context.IsSameAs(ctx));
 
             if (ctx.Action == MenuAction.Orange && (holdContext?.Timer > 0 || ctx.Player is null))
-                _popupMenu.gameObject.SetActive(true);
+                OpenFilters(); // song options moved to X (Blue)
 
             _heldInputs.RemoveAll(i => i.Context.IsSameAs(ctx));
         }
@@ -810,16 +904,29 @@ namespace YARG.Menu.MusicLibrary
                 return;
 
             SelectedIndex = _sectionHeaderIndices[i];
+            SkipHeads(1);
         }
 
         private void GoToPreviousSection()
         {
-            var i = _sectionHeaderIndices.BinarySearch(SelectedIndex);
+            // From a section's first song, the section before it (its own head is skipped, so it isn't a stop)
+            int from = _sectionHeaderIndices.Contains(SelectedIndex - 1) ? SelectedIndex - 1 : SelectedIndex;
+            var i = _sectionHeaderIndices.BinarySearch(from);
             i = i < 0 ? ~i - 1 : i - 1;
             if (i < 0)
                 return;
 
             SelectedIndex = _sectionHeaderIndices[i];
+            SkipHeads(1);
+        }
+
+        /// <summary>Section heads are labels in the Moonlight list, not stops: moving onto one goes on to the next song.</summary>
+        private void SkipHeads(int direction)
+        {
+            for (int n = 0; n < ViewList.Count && CurrentSelection is SortHeaderViewType && ViewList.Any(v => v is SongViewType); n++)
+            {
+                SelectedIndex += direction;
+            }
         }
 
         public void SelectRandomSong()

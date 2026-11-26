@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Cysharp.Text;
 using DG.Tweening;
@@ -111,6 +111,9 @@ namespace YARG.Gameplay.HUD
             _displayedCountDownSeconds = -1;
 
             _songProgressBar.SetProgress(0f);
+
+            // The Moonlight board's flat panel, drawn over this box (which keeps counting underneath)
+            HudMoonlight.CreateScorePanel(transform, GameManager, _songTimer);
         }
 
         protected override void OnChartLoaded(SongChart chart)

@@ -199,6 +199,8 @@ namespace YARG.Menu.MusicLibrary
                         index = 0;
                     }
                     SelectedIndex = index;
+                    SkipHeads(1); // the list can open with the season or featured head
+
                 }
             }
 
@@ -363,6 +365,15 @@ namespace YARG.Menu.MusicLibrary
 
         private void UpdateSortInformationHeader()
         {
+            if (_subtitle != null)
+            {
+                // The Moonlight board's line beside the title: "148 songs · by title"
+                string songs = _totalSongCount == 1 ? "song" : "songs";
+                _subtitle.text = MenuState == MenuState.PlaylistSelect ? "Your playlists"
+                    : _searchField.IsSearching ? ZString.Format("{0:N0} {1} found", _totalSongCount, songs)
+                    : ZString.Format("{0:N0} {1} · by title", _totalSongCount, songs);
+            }
+
             if (MenuState == MenuState.Library)
             {
                 if (_searchField.IsSearching)

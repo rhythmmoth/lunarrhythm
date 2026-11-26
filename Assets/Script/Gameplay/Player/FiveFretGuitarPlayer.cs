@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
@@ -95,16 +96,10 @@ namespace YARG.Gameplay.Player
         public override bool ShouldUpdateInputsOnResume => true;
 
         /// See <see cref="StarMultiplierThresholds"/>
-        private static float[] GuitarStarMultiplierThresholds => new[]
-        {
-            0.06f, 0.12f, 0.2f, 0.47f, 0.78f, 1.15f
-        };
+        private static float[] GuitarStarMultiplierThresholds => StarThresholds.Guitar;
 
         /// See <see cref="StarMultiplierThresholds"/>
-        private static float[] BassStarMultiplierThresholds => new[]
-        {
-            0.05f, 0.1f, 0.19f, 0.47f, 0.78f, 1.15f
-        };
+        private static float[] BassStarMultiplierThresholds => StarThresholds.Bass;
 
         public GuitarEngineParameters EngineParams { get; private set; }
 
@@ -194,7 +189,8 @@ namespace YARG.Gameplay.Player
             }
 
             var engine = new YargFiveFretGuitarEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot);
-            EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
+            // Others' highways stay out of band scoring, star power and the fail meter
+            if (!Player.IsRemote) EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
 
             HitWindow = EngineParams.HitWindow;
 
@@ -417,7 +413,7 @@ namespace YARG.Gameplay.Player
 
         public override void SetStemMuteState(bool muted)
         {
-            if (IsStemMuted != muted)
+            if (IsStemMuted != muted && !Player.IsRemote) // others' highways never touch the audio
             {
                 GameManager.ChangeStemMuteState(_stem, muted);
                 IsStemMuted = muted;
@@ -550,7 +546,7 @@ namespace YARG.Gameplay.Player
                 const int MAX = (int) SfxSample.Overstrum4;
 
                 var randomOverstrum = (SfxSample) Random.Range(MIN, MAX + 1);
-                GlobalAudioHandler.PlaySoundEffect(randomOverstrum);
+                if (!Player.IsRemote) GlobalAudioHandler.PlaySoundEffect(randomOverstrum);
             }
 
             // To check if held frets are valid
@@ -644,7 +640,7 @@ namespace YARG.Gameplay.Player
             if (_sustainCount == 0)
             {
                 WhammyFactor = 0;
-                GameManager.ChangeStemWhammyPitch(_stem, 0);
+                if (!Player.IsRemote) GameManager.ChangeStemWhammyPitch(_stem, 0);
             }
         }
 
@@ -673,7 +669,7 @@ namespace YARG.Gameplay.Player
             if (_sustainCount > 0 && input.GetAction<GuitarAction>() == GuitarAction.Whammy)
             {
                 WhammyFactor = Mathf.Clamp01(input.Axis);
-                GameManager.ChangeStemWhammyPitch(_stem, WhammyFactor);
+                if (!Player.IsRemote) GameManager.ChangeStemWhammyPitch(_stem, WhammyFactor);
             }
         }
 

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
@@ -59,10 +60,7 @@ namespace YARG.Gameplay.Player
         private const int SHIFT_INDICATOR_MEASURES_BEFORE = 4;
         private const int MAX_TOTAL_BRE_LANES = 4;
 
-        protected override float[] StarMultiplierThresholds { get; set; } =
-        {
-            0.06f, 0.12f, 0.2f, 0.47f, 0.78f, 1.15f
-        };
+        protected override float[] StarMultiplierThresholds { get; set; } = StarThresholds.ProKeys;
 
         public KeysEngineParameters EngineParams { get; private set; }
 
@@ -149,7 +147,8 @@ namespace YARG.Gameplay.Player
             }
 
             var engine = new YargProKeysEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot);
-            EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
+            // Others' highways stay out of band scoring, star power and the fail meter
+            if (!Player.IsRemote) EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
 
             HitWindow = EngineParams.HitWindow;
 
@@ -498,7 +497,7 @@ namespace YARG.Gameplay.Player
 
         public override void SetStemMuteState(bool muted)
         {
-            if (IsStemMuted != muted)
+            if (IsStemMuted != muted && !Player.IsRemote) // others' highways never touch the audio
             {
                 GameManager.ChangeStemMuteState(SongStem.Keys, muted);
                 IsStemMuted = muted;

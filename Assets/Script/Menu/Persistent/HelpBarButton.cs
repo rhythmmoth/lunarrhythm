@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -40,7 +40,7 @@ namespace YARG.Menu.Persistent
 
         // Visually transparent, but not affected by the mask component
         private readonly Color _maskableClear = new(0f, 0f, 0f, 0.01f);
-        private readonly Color _coolGrey      = new(123 / 255f, 127 / 255f, 154 / 255f, 1f);
+        private readonly Color _coolGrey      = Moonlight.Soft;
         private readonly Color _darkCoolGrey = new(123 / 255f, 127 / 255f, 154 / 255f, 0.05f);
 
         private bool _clickable = true;
@@ -80,18 +80,119 @@ namespace YARG.Menu.Persistent
 
             // Label
             _buttonLabel.text = entry.DisplayName;
+            StyleMoonlight(entry.Action, icons.GetColor(entry.Action));
 
             // Show/hide text and transitions
             _isSpecialButton = entry.Action is MenuAction.Select or MenuAction.Start or MenuAction.Left or MenuAction.Right;
             _buttonText.gameObject.SetActive(!_isSpecialButton);
-            _button.transition = _isSpecialButton
-                ? Selectable.Transition.None
-                : Selectable.Transition.SpriteSwap;
+            // No sprite swap: YARG's highlight sprites drew a stray glyph over the Moonlight keycap; hover is shown by colour
+            _button.transition = Selectable.Transition.None;
 
             // Set sprite and fill color, then apply idle state
             _buttonImage.sprite = icons.GetIcon(entry.Action);
+            if (_fret)
+            {
+                // Moonlight keycap: a disc in the fret's colour, so it reads the same on any controller
+                _buttonImage.sprite = Moonlight.RoundedSprite(20);
+                _buttonImage.type = Image.Type.Sliced;
+                _buttonImageColor = icons.GetColor(entry.Action).WithAlpha(1f);
+            }
+            else
+            {
+                _buttonImage.type = Image.Type.Simple;
+            }
             _buttonHoldFill.color = _buttonFillColor;
+            if (_primary)
+            {
+                PlacePlayIcon();
+            }
             ApplyState(_defaultState);
+        }
+
+        private bool _fret;
+        private bool _styled;
+
+        /// <summary>
+        /// Moonlight look, as on the boards' footers: the fret buttons are 39px discs in their fret's colour (not a
+        /// pad's letters, which differ between controllers), then the label in sentence case 13.5px after. Arrows
+        /// and the Select/Start shapes keep their icon, in the text colour.
+        /// </summary>
+        private void StyleMoonlight(MenuAction action, Color actionColor)
+        {
+            if (!_styled)
+            {
+                _styled = true;
+                _buttonImage.preserveAspect = false;
+                _buttonLabel.fontStyle = _buttonText.fontStyle = FontStyles.Normal; // the old style forced capitals
+            }
+            _buttonLabel.fontSize = 22.5f; // every time: gameplay shrinks it
+            // The help bar is set up before the main menu hands out the fonts, so catch up whenever they appear
+            if (Moonlight.Body != null && _buttonLabel.font != Moonlight.Body)
+            {
+                _buttonLabel.font = _buttonText.font = Moonlight.Body;
+            }
+            _fret = action is MenuAction.Green or MenuAction.Red or MenuAction.Yellow or MenuAction.Blue
+                or MenuAction.Orange;
+            _buttonText.text = string.Empty;
+            float width = _fret ? 39f : 36f;
+            var rect = _buttonImage.rectTransform;
+            rect.sizeDelta = new Vector2(width, width);
+            rect.anchoredPosition = new Vector2(0f, rect.anchoredPosition.y); // pivoted on its left edge
+            if (!_primary && _buttonOutline.TryGetComponent(out HorizontalLayoutGroup row))
+            {
+                row.padding = new RectOffset(Mathf.RoundToInt(width + 13.5f), 0, 0, 0);
+                _buttonLabel.margin = Vector4.zero; // the prefab's 19/22px margins aren't on the board
+            }
+            if (!_fret)
+            {
+                _buttonImageColor = Moonlight.Soft;
+            }
+        }
+
+        private bool _primary;
+
+        /// <summary>
+        /// Moonlight's main call to action: a cream pill with dark text, like the music library's Play button.
+        /// </summary>
+        public void MakePrimary()
+        {
+            _primary = true;
+            _buttonBackground.sprite = _buttonHoldFill.sprite = Moonlight.RoundedSprite(34);
+            _buttonBackground.type = Image.Type.Sliced;
+            _buttonOutline.enabled = false;
+            // The board's pill: a play triangle and the label centred, no keycap
+            _buttonImage.gameObject.SetActive(false);
+            if (_buttonOutline.TryGetComponent(out HorizontalLayoutGroup row))
+            {
+                row.padding = new RectOffset(0, 0, 0, 0);
+            }
+            _buttonLabel.alignment = TextAlignmentOptions.Center;
+            _buttonLabel.fontSize = 25.5f;
+            _buttonLabel.fontWeight = FontWeight.Bold;
+            _playIcon = new GameObject("Play Icon", typeof(RectTransform), typeof(Image), typeof(LayoutElement)).GetComponent<Image>();
+            _playIcon.GetComponent<LayoutElement>().ignoreLayout = true;
+            _playIcon.transform.SetParent(transform, false);
+            _playIcon.sprite = Moonlight.Play;
+            _playIcon.color = Moonlight.Night;
+            _playIcon.raycastTarget = false;
+            _playIcon.rectTransform.anchorMin = _playIcon.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            _playIcon.rectTransform.sizeDelta = new Vector2(21f, 21f);
+            PlacePlayIcon();
+            ApplyState(_currentState);
+        }
+
+        private Image _playIcon;
+
+        /// <summary>The triangle sits 15px left of the label; the two are centred together, like the board's.</summary>
+        private void PlacePlayIcon()
+        {
+            if (_playIcon == null)
+            {
+                return;
+            }
+            _buttonLabel.margin = new Vector4(36f, 0f, 0f, 0f); // room for the triangle and its gap
+            float text = _buttonLabel.GetPreferredValues(_buttonLabel.text).x;
+            _playIcon.rectTransform.anchoredPosition = new Vector2(18f - text / 2f - 15f - 10.5f, 0f);
         }
 
         public void OnPointerEnter(PointerEventData eventData)
@@ -222,7 +323,7 @@ namespace YARG.Menu.Persistent
 
             _currentState = state;
 
-            _button.transition = _isSpecialButton ? Selectable.Transition.None : Selectable.Transition.SpriteSwap;
+            _button.transition = Selectable.Transition.None;
             switch (state)
             {
                 case ButtonState.NONE:
@@ -261,6 +362,16 @@ namespace YARG.Menu.Persistent
                     _buttonText.color = _coolGrey;
                     _button.transition = Selectable.Transition.None;
                     break;
+            }
+
+            if (_primary)
+            {
+                _button.transition = Selectable.Transition.None; // the swap sprites are YARG's
+                _buttonBackground.color = state is ButtonState.PRESS or ButtonState.HOLD
+                    ? Color.Lerp(Moonlight.Moon, Moonlight.Night, 0.12f)
+                    : Moonlight.Moon;
+                _buttonHoldFill.color = Moonlight.Night.WithAlpha(0.15f);
+                _buttonLabel.color = _buttonText.color = Moonlight.Night;
             }
         }
 

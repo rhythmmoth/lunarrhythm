@@ -28,6 +28,10 @@ namespace YARG.Core.Game
 
         public bool LeftyFlip;
 
+        /// <summary>The 2D highway's strike line at the top, notes rising to it. Display only: saved with the profile
+        /// but not in the binary (replay and online) format, so it changes no run.</summary>
+        public bool Upscroll;
+
         public bool RangeEnabled;
 
         public int FourLaneDrumsHighwayOrderingLength;

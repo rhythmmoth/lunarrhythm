@@ -39,6 +39,12 @@ namespace YARG.Player
         public bool IsScoreValid { get; set; } = true;
 
         public bool IsReplay { get; private set; }
+
+        /// <summary>Another lobby player's presses, arriving as they play; null for everyone on this PC.</summary>
+        public YARG.Core.Song.Lobby.RemoteFeed Remote { get; private set; }
+
+        /// <summary>Another lobby player shown on this PC. Also a replay (no controller), but never scored or heard.</summary>
+        public bool IsRemote => Remote != null;
         public int ReplayIndex = -1;
 
         /// <summary>
@@ -57,21 +63,32 @@ namespace YARG.Player
             IsReplay = false;
         }
 
-        public YargPlayer(ReplayFrame frame, ReplayData replay)
+        public YargPlayer(ReplayFrame frame, ReplayData replay) : this(frame, replay, null)
+        {
+        }
+
+        /// <summary>Another lobby player, driven by the presses they stream (see <see cref="Remote"/>).</summary>
+        public YargPlayer(ReplayFrame frame, YARG.Core.Song.Lobby.RemoteFeed feed, string name) : this(frame, null, feed)
+        {
+            Profile.Name = name;
+        }
+
+        private YargPlayer(ReplayFrame frame, ReplayData replay, YARG.Core.Song.Lobby.RemoteFeed remote)
         {
             Profile = frame.Profile;
             Bindings = null;
             EngineParameterOverride = frame.EngineParameters;
             IsReplay = true;
+            Remote = remote;
 
             EnginePreset = CustomContentManager.EnginePresets.GetPresetById(Profile.EnginePreset)
                 ?? EnginePreset.Default;
             ThemePreset = CustomContentManager.ThemePresets.GetPresetById(Profile.ThemePreset)
                 ?? ThemePreset.Default;
-            ColorProfile = replay.GetColorProfile(Profile.ColorProfile)
+            ColorProfile = replay?.GetColorProfile(Profile.ColorProfile)
                 ?? CustomContentManager.ColorProfiles.GetPresetById(Profile.ColorProfile)
                 ?? ColorProfile.Default;
-            CameraPreset = replay.GetCameraPreset(Profile.CameraPreset)
+            CameraPreset = replay?.GetCameraPreset(Profile.CameraPreset)
                 ?? CustomContentManager.CameraSettings.GetPresetById(Profile.CameraPreset)
                 ?? CameraPreset.Default;
 
@@ -103,6 +120,33 @@ namespace YARG.Player
             if (enabled)
             {
                 EnableInputs();
+            }
+        }
+
+        /// <summary>
+        /// Lays the signed-in player's worn highway and note themes over their own presets for this song. The saved
+        /// presets (and the profile's preset ids) stay as they are; free starting themes have no colours and change nothing.
+        /// </summary>
+        /// <summary>The 2D highway's worn note shape and hit effect, by cosmetic id (null: the free ones).</summary>
+        public string NoteShape, HitEffect;
+
+        public void ApplyOnlineThemes(YARG.Core.Song.Leaderboards.Profile online)
+        {
+            if (online == null)
+            {
+                return;
+            }
+            NoteShape = online.Items.Find(i => i.Type == "noteshape" && i.Equipped)?.Id;
+            HitEffect = online.Items.Find(i => i.Type == "hiteffect" && i.Equipped)?.Id;
+            var notes = online.Items.Find(i => i.Type == "notes" && i.Equipped)?.Colors;
+            if (notes != null)
+            {
+                ColorProfile = YARG.Core.Song.OnlineThemes.Notes(ColorProfile, notes);
+            }
+            var highway = online.Items.Find(i => i.Type == "highway" && i.Equipped)?.Colors;
+            if (highway != null)
+            {
+                HighwayPreset = YARG.Core.Song.OnlineThemes.Highway(HighwayPreset, highway);
             }
         }
 

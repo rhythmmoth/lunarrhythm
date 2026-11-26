@@ -335,8 +335,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 2d58d4e6ce696bb41a9e970ab3773f3e, type: 3}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 36717c2e41881f044a47d90af9204ed0, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -410,8 +410,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 2d58d4e6ce696bb41a9e970ab3773f3e, type: 3}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 36717c2e41881f044a47d90af9204ed0, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -808,6 +808,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -899,7 +900,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.0627451, g: 0.10980392, b: 0.16862746, a: 1}
+  m_Color: {r: 0.043137256, g: 0.0627451, b: 0.14901961, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1040,6 +1041,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1143,7 +1145,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2c2191ebe34acb24a91d7c5f9677adb2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YARG.Menu.Filters.FilterEntryRow
-  _evenBackground: {fileID: 6324038740723351658}
   _label: {fileID: 2474194055696389214}
   _number: {fileID: 5688764008084032293}
   _toggle: {fileID: 3620472652507800441}

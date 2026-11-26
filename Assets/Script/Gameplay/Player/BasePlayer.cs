@@ -2,6 +2,7 @@
 using PlasticBand.Haptics;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
 using YARG.Core.Engine;
@@ -72,9 +73,7 @@ namespace YARG.Gameplay.Player
         /// Multiples of the maximum points it is possible to get from a solo, which is then added to each star point threshold (1 to 5, then gold stars).
         /// <seealso cref="StarMultiplierThresholds"/>
         /// </summary>
-        protected readonly float[] SoloBonusStarMultiplierThresholds = {
-            0.05f, 0.1f, 0.2f, 0.35f, 0.65f, 0.95f
-        };
+        protected readonly float[] SoloBonusStarMultiplierThresholds = StarThresholds.SoloBonus;
 
         public abstract bool ShouldUpdateInputsOnResume { get; }
 
@@ -188,12 +187,57 @@ namespace YARG.Gameplay.Player
                 return;
             }
 
+            if (Player.Remote is { } feed)
+            {
+                UpdateRemote(feed);
+                return;
+            }
+
             if (!GameManager.Rewinding)
             {
                 UpdateInputs(GameManager.InputTime);
             }
 
             UpdateVisuals(GameManager.VisualTime);
+        }
+
+        /// <summary>The least another lobby player's highway runs behind the music, so their presses have time to arrive.</summary>
+        public const double REMOTE_DELAY = 0.25;
+        private const double REMOTE_DELAY_MAX = 1.5;
+        // Margin over how late their presses arrive, and how fast the delay may grow or shrink (seconds per second)
+        private const double REMOTE_MARGIN = 0.12, REMOTE_GROW = 0.5, REMOTE_SHRINK = 0.05;
+
+        private double _remoteTime = double.NegativeInfinity;
+        private double _remoteDelay = REMOTE_DELAY;
+
+        /// <summary>
+        /// Another lobby player's highway: their presses replayed behind the music, by a delay that follows how late
+        /// their presses arrive (it eases up when they come late, so the highway slows a little instead of freezing,
+        /// and back down slowly once they're on time). It never runs past what they've sent (the engine would count
+        /// notes as missed), so it still waits if their presses stop altogether.
+        /// </summary>
+        private void UpdateRemote(YARG.Core.Song.Lobby.RemoteFeed feed)
+        {
+            // The sender's times include their input calibration, which UpdateInputs adds back
+            double sent = feed.Watermark - InputCalibration;
+            if (!double.IsNegativeInfinity(sent))
+            {
+                double needed = System.Math.Clamp(GameManager.InputTime - sent + REMOTE_MARGIN, REMOTE_DELAY, REMOTE_DELAY_MAX);
+                double step = UnityEngine.Time.unscaledDeltaTime;
+                _remoteDelay = needed > _remoteDelay
+                    ? System.Math.Min(needed, _remoteDelay + REMOTE_GROW * step)
+                    : System.Math.Max(needed, _remoteDelay - REMOTE_SHRINK * step);
+            }
+            double time = System.Math.Min(GameManager.InputTime - _remoteDelay, sent);
+            if (time > _remoteTime)
+            {
+                _remoteTime = time;
+                UpdateInputs(time);
+            }
+            if (!double.IsNegativeInfinity(_remoteTime))
+            {
+                UpdateVisuals(_remoteTime + (GameManager.VisualTime - GameManager.InputTime));
+            }
         }
 
         protected abstract void UpdateVisuals(double visualTime);
@@ -252,7 +296,15 @@ namespace YARG.Gameplay.Player
             // Video offset is already accounted for
             time += InputCalibration;
 
-            if (Player.IsReplay && GameManager.ReplayInfo != null)
+            if (Player.Remote is { } feed)
+            {
+                while (feed.Inputs.TryPeek(out var next) && next.Time <= time && feed.Inputs.TryDequeue(out var input))
+                {
+                    BaseEngine.QueueInput(ref input);
+                    OnInputQueued(input);
+                }
+            }
+            else if (Player.IsReplay && GameManager.ReplayInfo != null)
             {
                 while (_replayInputIndex < ReplayInputs.Count)
                 {
@@ -368,7 +420,7 @@ namespace YARG.Gameplay.Player
 
         protected virtual void OnStarPowerPhraseHit()
         {
-            if (!GameManager.Paused && !GameManager.IsSeekingReplay)
+            if (!GameManager.Paused && !GameManager.IsSeekingReplay && !Player.IsRemote)
             {
                 GlobalAudioHandler.PlaySoundEffect(SfxSample.StarPowerAward);
             }
@@ -376,7 +428,7 @@ namespace YARG.Gameplay.Player
 
         protected virtual void OnStarPowerReady()
         {
-            if (!GameManager.Paused && !GameManager.IsSeekingReplay)
+            if (!GameManager.Paused && !GameManager.IsSeekingReplay && !Player.IsRemote)
             {
                 GlobalAudioHandler.PlaySoundEffect(SfxSample.StarPowerReady);
             }
@@ -395,7 +447,7 @@ namespace YARG.Gameplay.Player
                 deploySample = SfxSample.StarPowerDeployCrowd;
             }
 
-            if (!GameManager.Paused)
+            if (!GameManager.Paused && !Player.IsRemote)
             {
                 GlobalAudioHandler.PlaySoundEffect(active
                     ? deploySample
@@ -404,7 +456,7 @@ namespace YARG.Gameplay.Player
                 SetStarPowerFX(active);
             }
 
-            GameManager.ChangeStarPowerStatus(active);
+            if (!Player.IsRemote) GameManager.ChangeStarPowerStatus(active);
 
             foreach (var haptics in SantrollerHaptics)
             {

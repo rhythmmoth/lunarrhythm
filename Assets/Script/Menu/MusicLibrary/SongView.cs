@@ -76,6 +76,10 @@ namespace YARG.Menu.MusicLibrary
         [SerializeField]
         private Sprite _starWhiteSprite;
 
+        private LibraryMoonlight.Row _moon;
+
+        private void Awake() => _moon = LibraryMoonlight.StyleRow(transform);
+
         public override void Show(bool selected, ViewType viewType)
         {
             base.Show(selected, viewType);
@@ -154,15 +158,20 @@ namespace YARG.Menu.MusicLibrary
                 _favoriteButtonContainerSelected.SetActive(false);
             }
 
-            // Set height
+            // Set height: the Moonlight board's 48px rows and 44px section heads, ×1.5
             if (viewType is SortHeaderViewType)
             {
-                gameObject.GetComponent<RectTransform>().SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 60);
+                gameObject.GetComponent<RectTransform>().SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 66);
             }
             else
             {
-                gameObject.GetComponent<RectTransform>().SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 70);
+                gameObject.GetComponent<RectTransform>().SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 72);
             }
+
+            // The board has no hearts on the rows: favourites are in the song options
+            _favoriteButtonContainer.SetActive(false);
+            _favoriteButtonContainerSelected.SetActive(false);
+            LibraryMoonlight.FillRow(_moon, viewType, selected);
 
             StarAmount starHeaderAmount = StarAmount.None;
 

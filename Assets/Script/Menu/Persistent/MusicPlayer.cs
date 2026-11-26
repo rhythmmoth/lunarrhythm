@@ -15,8 +15,11 @@ namespace YARG.Menu.Persistent
     public class MusicPlayer : MonoBehaviour
     {
         private static SongEntry _nowPlaying = null;
+        /// <summary>The game song the current jukebox track promotes ("Play this song"), or null.</summary>
         public static SongEntry NowPlaying => _nowPlaying;
-        /// <summary>Fires on the main thread when <see cref="NowPlaying"/> starts a new song or stops.</summary>
+        /// <summary>The jukebox track playing on the title screen, or null.</summary>
+        public static Jukebox.Track CurrentTrack { get; private set; }
+        /// <summary>Fires on the main thread when <see cref="CurrentTrack"/> changes.</summary>
         public static event System.Action NowPlayingChanged;
 
         private object _lock = new();
@@ -42,12 +45,6 @@ namespace YARG.Menu.Persistent
             // Wait until the loading is done
             await UniTask.WaitUntil(() => !LoadingScreen.IsActive);
 
-            // Disable if there are no songs to play
-            if (SongContainer.Count <= 0)
-            {
-                gameObject.SetActive(false);
-                return;
-            }
             StemSettings.ApplySettings = false; // ensure that MusicPlayer uses the full-volume mix
             NextSong();
         }
@@ -63,23 +60,29 @@ namespace YARG.Menu.Persistent
         }
 
         private static Task<StemMixer> _current;
+        /// <summary>Plays the next jukebox track. With nothing playable yet it checks again a little later.</summary>
         public async void NextSong()
         {
-            const int MAX_TRIES = 20;
+            const int MAX_TRIES = 5;
             for (int tries = 0; tries < MAX_TRIES; tries++)
             {
-                var entry = SongContainer.GetRandomSong();
-                if (entry == _nowPlaying)
+                var track = await Jukebox.Next();
+                if (this == null || !isActiveAndEnabled)
                 {
-                    continue;
+                    return;
                 }
-                _nowPlaying = entry;
+                if (track == null)
+                {
+                    break;
+                }
 
                 Task<StemMixer> task;
                 lock (_lock)
                 {
                     const float SPEED = 1f;
-                    _current = task = Task.Run(() => entry.LoadAudio(SPEED, SettingsManager.Settings.MusicPlayerVolume.Value, SongStem.Crowd));
+                    double volume = SettingsManager.Settings.MusicPlayerVolume.Value;
+                    // normalize: tracks uploaded at different loudness play at the same level
+                    _current = task = Task.Run(() => GlobalAudioHandler.LoadCustomFile(track.AudioPath, SPEED, volume, normalize: true));
                 }
 
                 var mixer = await task;
@@ -87,6 +90,8 @@ namespace YARG.Menu.Persistent
                 {
                     continue;
                 }
+                CurrentTrack = track;
+                _nowPlaying = Jukebox.FindSong(track.Song);
 
                 lock (_lock)
                 {
@@ -106,15 +111,23 @@ namespace YARG.Menu.Persistent
                     };
                     _mixer.Play();
 
-                    _songText.text = _nowPlaying.Name;
-                    _artistText.text = _nowPlaying.Artist;
+                    _songText.text = track.Title;
+                    _artistText.text = track.Artist;
                     _playPauseButton.sprite = _pauseSprite;
                 }
                 NowPlayingChanged?.Invoke();
                 return;
             }
+            CurrentTrack = null;
             _nowPlaying = null;
             NowPlayingChanged?.Invoke();
+
+            // Offline or not signed in yet: try again in a while
+            if (!await UniTask.Delay(30_000, ignoreTimeScale: true, cancellationToken: destroyCancellationToken).SuppressCancellationThrow()
+                && this != null && isActiveAndEnabled && CurrentTrack == null)
+            {
+                NextSong();
+            }
         }
 
         public void UpdateVolume(double volume)

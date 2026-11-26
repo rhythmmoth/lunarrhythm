@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -70,6 +70,10 @@ namespace YARG.Menu.Persistent
         {
             base.SingletonAwake();
             EnsureTopmostCanvas();
+
+            // The board's toasts: top right, under the main menu's jukebox (the container starts 50 down)
+            var stack = GetComponent<VerticalLayoutGroup>();
+            stack.padding = new RectOffset(0, 42, 106, 0);
         }
 
         private void Update()
@@ -157,6 +161,15 @@ namespace YARG.Menu.Persistent
                 ToastType.Warning     => ("Warning",     _warningColor,     _iconWarning),
                 ToastType.Error       => ("Error",       _errorColor,       _iconError),
                 _ => throw new ArgumentException($"Invalid toast type {type}!")
+            };
+
+            // The board's line icons and colours
+            (icon, color) = type switch
+            {
+                ToastType.Success     => (Moonlight.Check, Moonlight.Good),
+                ToastType.Information => (Moonlight.Plus, Moonlight.Featured),
+                ToastType.General     => (Moonlight.StarOutline, Moonlight.Moon),
+                _                     => (Moonlight.Alert, Moonlight.Danger),
             };
 
             var toast = Instantiate(_toastPrefab, transform);

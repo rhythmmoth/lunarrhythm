@@ -175,10 +175,22 @@ namespace YARG.Gameplay
             }
 #endif
 
+            var mode = SettingsManager.Settings.GameBackground.Value;
+            if (mode == Visuals.GameBackgroundMode.Moonlight)
+            {
+                ShowMenuBackground();
+                return;
+            }
+            if (mode == Visuals.GameBackgroundMode.Visualizer)
+            {
+                ShowVisualizer();
+                return;
+            }
+
             using var result = VenueLoader.GetVenue(GameManager.Song, out _source);
             if (result == null)
             {
-                ShowMenuBackground();
+                ShowVisualizer();
                 return;
             }
 
@@ -289,7 +301,17 @@ namespace YARG.Gameplay
             }
         }
 
-        // No song or venue background: show the animated menu background, rendered like a venue
+        // The sky that plays along with the song (MoonVisualizer), drawn on the background image
+        private void ShowVisualizer()
+        {
+            _backgroundImage.texture = null;
+            _backgroundImage.uvRect = new Rect(0f, 0f, 1f, 1f);
+            _backgroundImage.color = Color.white;
+            _backgroundImage.gameObject.AddComponent<Visuals.MoonVisualizer>();
+            _backgroundImage.gameObject.SetActive(true);
+        }
+
+        // The menus' animated background, rendered like a venue
         private void ShowMenuBackground()
         {
             var prefab = Addressables.LoadAssetAsync<GameObject>("MenuBackground").WaitForCompletion();

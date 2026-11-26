@@ -130,3 +130,12 @@ mono_crash.mem.*.blob
 # Key the game sends to the song database server (secret; set up per machine)
 /Assets/Resources/OnlineApiKey.txt
 /Assets/Resources/OnlineApiKey.txt.meta
+
+# Local only: the Unity MCP config, editor test screenshots, and the stamp each build writes (BuildStamp.cs)
+/.mcp.json
+/Assets/Screenshots/
+/Assets/Screenshots.meta
+/Assets/StreamingAssets/build_stamp.txt
+/Assets/StreamingAssets/build_stamp.txt.meta
+/Assets/_Recovery/
+/Assets/_Recovery.meta

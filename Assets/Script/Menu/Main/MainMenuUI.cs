@@ -7,8 +7,8 @@ namespace YARG.Menu.Main
     /// <summary>Builds the plain UI pieces the title screen widgets are made of.</summary>
     internal static class MainMenuUI
     {
-        public static readonly Color PanelColor = new(0.05f, 0.04f, 0.11f, 0.78f);
-        public static readonly Color Accent = new(0.8f, 0.68f, 1f); // light purple: highlight bars, labels
+        public static readonly Color PanelColor = Moonlight.PanelFill;
+        public static readonly Color Accent = Moonlight.Moon; // the one highlight colour: selection, labels
 
         public static RectTransform Panel(string name, Transform parent, Sprite sprite)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
@@ -299,6 +299,7 @@ namespace YARG.Gameplay
                 totalScore += player.Score;
                 totalScore += player.BandBonusScore;
             }
+            UpdateLobby();
 
             if (GlobalVariables.VerboseReplays)
             {
@@ -318,6 +319,61 @@ namespace YARG.Gameplay
             }
         }
 
+
+        private float _nextLobbySend;
+        private int _lobbySent;
+        private bool _lobbyReconnecting, _lobbyLost;
+
+        /// <summary>The other lobby players' highways, and this player's presses going out to them every 100 ms.</summary>
+        private void UpdateLobby()
+        {
+            if (!Menu.Online.LobbyPlay.Playing) return;
+            // The connection broke: the game gets back in by itself; the song carries on either way
+            if (Lobby.Reconnecting != _lobbyReconnecting)
+            {
+                _lobbyReconnecting = Lobby.Reconnecting;
+                if (_lobbyReconnecting) ToastManager.ToastWarning("Lost the lobby connection. Reconnecting…");
+                else if (Lobby.State != null) ToastManager.ToastSuccess("Back in the lobby.");
+            }
+            if (!_lobbyLost && !_lobbyReconnecting && Lobby.State == null)
+            {
+                _lobbyLost = true;
+                ToastManager.ToastWarning("Couldn't get back into the lobby. Finish the song on your own.");
+            }
+            foreach (var remote in _remotePlayers)
+            {
+                remote.GameplayUpdate();
+            }
+            if (Time.unscaledTime < _nextLobbySend || !Started) return;
+            _nextLobbySend = Time.unscaledTime + 0.1f;
+
+            if (_players.FirstOrDefault(p => !p.Player.Profile.IsBot) is { } me)
+            {
+                // Copied here: the list keeps growing on this thread while the send runs on another
+                var inputs = me.ReplayInputs;
+                var fresh = new GameInput[inputs.Count - _lobbySent];
+                for (int i = 0; i < fresh.Length; i++) fresh[i] = inputs[_lobbySent + i];
+                _lobbySent = inputs.Count;
+                _ = Lobby.SendInputs(fresh, 0, me.BaseEngine.CurrentTime);
+            }
+
+            // Someone who left mid-song: their highway stops, marked
+            if (Lobby.State is { } state)
+            {
+                foreach (var (remote, id) in _remoteIds)
+                {
+                    if (remote is not TrackPlayer track || track.Player.Profile.Name.EndsWith(" · left")) continue;
+                    if (state.ById(id) is not { Dropped: false } who)
+                    {
+                        track.ShowLeft();
+                    }
+                    else
+                    {
+                        track.ShowAway(who.Away);
+                    }
+                }
+            }
+        }
 
         public void SetSongTime(double time, double delayTime = SONG_START_DELAY)
         {
@@ -370,6 +426,25 @@ namespace YARG.Gameplay
 
         public void Pause(bool showMenu = true)
         {
+            // In a lobby the song keeps going for everyone, so pausing only offers to leave
+            if (Menu.Online.LobbyPlay.Playing && !PlayerHasFailed)
+            {
+                if (showMenu && !DialogManager.Instance.IsDialogShowing)
+                {
+                    var dialog = DialogManager.Instance.ShowMessage("Leave the setlist?",
+                        "The song keeps going for everyone else. Leaving takes you back to the open lobbies.");
+                    dialog.ClearButtons();
+                    dialog.AddDialogButton("Menu.Common.Cancel", Menu.Data.MenuData.Colors.CancelButton, DialogManager.Instance.ClearDialog);
+                    dialog.AddDialogButton("Menu.Lobby.Leave", Menu.Data.MenuData.Colors.ConfirmButton, () =>
+                    {
+                        DialogManager.Instance.ClearDialog();
+                        Menu.Online.LobbyPlay.LeaveToList(); // back to the open lobbies, not the title
+                        ForceQuitSong();
+                    });
+                }
+                return;
+            }
+
             _songRunner.Pause();
             PauseCore(showMenu);
         }
@@ -579,6 +654,8 @@ namespace YARG.Gameplay
         public double GetRelativeInputTime(double timeFromInputSystem)
             => _songRunner.GetRelativeInputTime(timeFromInputSystem);
 
+        private bool _songEnded;
+
         private bool EndSong()
         {
             // Dispose the crowd handler
@@ -600,6 +677,14 @@ namespace YARG.Gameplay
                 Pause(false);
                 return true;
             }
+
+            // Once only: the scene keeps updating while the screen fades to night (Moonrise), and every pass here would
+            // save, record and send the run again
+            if (_songEnded)
+            {
+                return true;
+            }
+            _songEnded = true;
 #nullable enable
             ReplayInfo? replayInfo = null;
 #nullable disable
@@ -633,6 +718,10 @@ namespace YARG.Gameplay
 
             RecordScores(replayInfo);
             SubmitToLeaderboard();
+            if (_players.FirstOrDefault(p => !p.Player.Profile.IsBot) is { } lobbyPlayer)
+            {
+                Menu.Online.LobbyPlay.Finished(lobbyPlayer.Score, Mathf.Clamp((int) lobbyPlayer.Stars, 0, 7), lobbyPlayer.IsFc);
+            }
 
             // Go to the score screen
             GlobalVariables.Instance.LoadScene(SceneIndex.Score);
@@ -758,7 +847,9 @@ namespace YARG.Gameplay
         {
             // Boards are per player, so only solo runs of online songs count
             var humans = _players.Where(p => !p.Player.Profile.IsBot).ToList();
-            if (humans.Count != 1 || !Leaderboards.SignedIn || !OnlineSongs.IsOnlineFolder(Song.ActualLocation))
+            // Too old a build: the server would refuse it, so it isn't sent (or kept to send later)
+            if (humans.Count != 1 || !Leaderboards.SignedIn || Leaderboards.UpdateRequired
+                || !OnlineSongs.IsOnlineFolder(Song.ActualLocation))
             {
                 return;
             }
@@ -785,7 +876,23 @@ namespace YARG.Gameplay
                 NotesHit = player.BaseStats.NotesHit,
                 NotesMissed = player.BaseStats.NotesMissed,
                 Fc = player.IsFc,
+                Recording = Recording(player),
             }).Forget();
+        }
+
+        /// <summary>The run's setup and button presses, for the server to replay; null if it can't be made (the server
+        /// then checks it the old way).</summary>
+        private static string Recording(BasePlayer player)
+        {
+            try
+            {
+                return Leaderboards.EncodeRecording(player.ConstructReplayData().Frame);
+            }
+            catch (Exception e)
+            {
+                YargLogger.LogException(e, "Couldn't make the run's recording");
+                return null;
+            }
         }
 
         // Static: the game scene is gone by the time the server answers
@@ -799,6 +906,7 @@ namespace YARG.Gameplay
             }
             else if (result.Accepted)
             {
+                YARG.Menu.Main.ProfileCard.Reload().Forget(); // the title screen's level and XP bar follow the new XP
                 if (result.PersonalBest)
                 {
                     ToastManager.ToastSuccess($"New personal best! #{result.Rank} on the leaderboard");
@@ -807,15 +915,31 @@ namespace YARG.Gameplay
                 {
                     ToastManager.ToastInformation($"Your best is still {result.Best:N0} (#{result.Rank})");
                 }
+                if (result.Progress != null && result.Xp != null && result.Progress.Level > result.Xp.LevelBefore)
+                {
+                    ToastManager.ToastMessage($"Level {result.Progress.Level}!");
+                }
+                foreach (var challenge in result.Completed)
+                {
+                    ToastManager.ToastSuccess($"Challenge done: {challenge}");
+                }
+                foreach (var look in result.Unlocked)
+                {
+                    ToastManager.ToastMessage($"Unlocked: {look}");
+                }
             }
             else
             {
                 string reason = result.Reason switch
                 {
                     "chart_outdated"   => "this chart was updated. Restart the game to get the new one.",
+                    "chart_changed"    => "this chart changed since you got it. Restart the game to get the new one.",
                     "unranked_song"    => "this song doesn't have a leaderboard yet.",
                     "impossible_score" or "wrong_note_count" => "the score couldn't be verified.",
+                    "run_check_failed" => "the run didn't replay to this score. Leaderboards need the default engine settings, no modifiers and full speed.",
                     "banned"           => "your account is banned from the leaderboards.",
+                    "update_required"  => "this version is too old for leaderboards. Update the game to send scores.",
+                    "account_too_new"  => "Discord accounts younger than 30 days can't send scores yet.",
                     "signed_out"       => "your sign-in expired. Sign in again in Settings.",
                     _                  => result.Reason,
                 };
@@ -961,7 +1085,8 @@ namespace YARG.Gameplay
 
         private async void OnSongFailed()
         {
-            if (SettingsManager.Settings.NoFail.Value != NoFailMode.Off || IsPractice)
+            // No failing in a lobby: the others' song can't stop for it
+            if (SettingsManager.Settings.NoFail.Value != NoFailMode.Off || IsPractice || Menu.Online.LobbyPlay.Playing)
             {
                 return;
             }

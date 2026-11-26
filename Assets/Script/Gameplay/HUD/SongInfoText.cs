@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -23,6 +23,8 @@ namespace YARG.Gameplay.HUD
                 Destroy(gameObject);
                 return;
             }
+
+            HudMoonlight.CreateSongPill((RectTransform) transform, _text, GameManager.Song);
 
             if (!SettingsManager.Settings.KeepSongInfoVisible.Value)
             {

@@ -167,7 +167,8 @@ namespace YARG.Song
             }
 
             // Not in git; see .gitignore. Without it the API refuses us and the saved database is used.
-            string apiKey = UnityEngine.Resources.Load<UnityEngine.TextAsset>("OnlineApiKey")?.text.Trim();
+            // Scrambled in the file (see OnlineKey); a plain one from before still works
+            string apiKey = OnlineKey.Read(UnityEngine.Resources.Load<UnityEngine.TextAsset>("OnlineApiKey")?.text);
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var task = UniTask.RunOnThreadPool(() =>
@@ -614,10 +615,20 @@ namespace YARG.Song
             {
                 case ScanStage.LoadingCache:
                 case ScanStage.LoadingSongs:
-                    subText = $"Folders Scanned: {tracker.NumScannedDirectories}\n" +
-                              $"Songs Scanned: {tracker.Count}\n" +
-                              $"Errors: {tracker.BadSongCount}"; break;
+                    subText = $"{tracker.Count:N0} songs · {tracker.NumScannedDirectories:N0} folders" +
+                              (tracker.BadSongCount > 0 ? $" · {tracker.BadSongCount:N0} errors" : ""); break;
             }
+
+            // The loading ring: the song list is the second half of startup, a stage at a time
+            LoadingMoonlight.Progress = tracker.Stage switch
+            {
+                ScanStage.LoadingCache    => 0.6f,
+                ScanStage.LoadingSongs    => 0.7f,
+                ScanStage.Sorting         => 0.85f,
+                ScanStage.WritingCache    => 0.95f,
+                ScanStage.WritingBadSongs => 0.95f,
+                _                         => LoadingMoonlight.Progress,
+            };
             context.SetLoadingText(phrase, subText);
         }
 

@@ -20,31 +20,30 @@ namespace YARG.Menu.Main
 
         public static NewsTicker Create(Transform parent, TMP_FontAsset font, Sprite panel)
         {
-            var rect = MainMenuUI.Panel("News", parent, panel);
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.offsetMin = new Vector2(60f, 95f);   // sits right above the help bar
-            rect.offsetMax = new Vector2(-140f, 147f); // leaves room for the Discord button
+            // A pill at the bottom left, right above the help bar
+            var rect = Moonlight.Panel("News", parent, 33, Moonlight.PanelFill).rectTransform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.zero;
+            rect.anchoredPosition = new Vector2(42f, 105f);
+            rect.sizeDelta = new Vector2(900f, 66f);
 
-            var label = MainMenuUI.Text("Label", rect, font, 22f, MainMenuUI.Accent, FontStyles.Bold);
+            var label = Moonlight.Label("Label", rect, Moonlight.Heading ? Moonlight.Heading : font, 16f, Moonlight.Moon);
             label.text = "NEWS";
-            label.alignment = TextAlignmentOptions.Center;
+            label.characterSpacing = 12f;
             var labelRect = label.rectTransform;
             labelRect.anchorMin = new Vector2(0f, 0f);
             labelRect.anchorMax = new Vector2(0f, 1f);
             labelRect.pivot = new Vector2(0f, 0.5f);
-            labelRect.offsetMin = new Vector2(16f, 0f);
-            labelRect.offsetMax = new Vector2(100f, 0f);
+            labelRect.offsetMin = new Vector2(28f, 0f);
+            labelRect.offsetMax = new Vector2(110f, 0f);
 
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
             viewport.SetParent(rect, false);
             viewport.anchorMin = Vector2.zero;
             viewport.anchorMax = Vector2.one;
-            viewport.offsetMin = new Vector2(112f, 0f);
-            viewport.offsetMax = new Vector2(-16f, 0f);
+            viewport.offsetMin = new Vector2(120f, 0f);
+            viewport.offsetMax = new Vector2(-28f, 0f);
 
-            var text = MainMenuUI.Text("Text", viewport, font, 24f, new Color(0.9f, 0.89f, 0.96f), FontStyles.Normal);
+            var text = MainMenuUI.Text("Text", viewport, font, 23f, Moonlight.Soft, FontStyles.Normal);
             var textRect = text.rectTransform;
             textRect.anchorMin = new Vector2(0f, 0f);
             textRect.anchorMax = new Vector2(0f, 1f);

@@ -37,6 +37,9 @@ namespace YARG.Menu
         private Dictionary<Menu, MenuObject> _menus;
 
         private readonly Stack<Menu> _openMenus = new();
+
+        /// <summary>The menu on top (None before any opens).</summary>
+        public Menu CurrentMenu => _openMenus.TryPeek(out var menu) ? menu : Menu.None;
         private Coroutine _reactivateCoroutine;
 
         protected override void SingletonAwake()
@@ -98,6 +101,7 @@ namespace YARG.Menu
             if (setActiveImmediate)
             {
                 newMenu.gameObject.SetActive(true);
+                if (hideOther) Moonrise.Rise(newMenu.gameObject);
             }
 
             // ... and push it onto the stack
@@ -124,7 +128,9 @@ namespace YARG.Menu
             if (_openMenus.TryPeek(out var newMenuEnum) &&
                 _menus.TryGetValue(newMenuEnum, out var newMenu))
             {
+                bool wasShown = newMenu.gameObject.activeSelf;
                 newMenu.gameObject.SetActive(true);
+                if (!wasShown) Moonrise.Rise(newMenu.gameObject, back: true);
             }
             else
             {

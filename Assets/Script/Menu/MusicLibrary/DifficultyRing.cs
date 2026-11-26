@@ -163,7 +163,46 @@ namespace YARG.Menu.MusicLibrary
                 _ringBase.color = _ringBase.color.WithAlpha(INACTIVE_OPACITY);
             }
 
+            ShowMoons(values.Intensity);
             UpdateIconColor();
+        }
+
+        private const int MOONS = 6;
+        private Image[] _moons;
+
+        /// <summary>
+        /// Moonlight: the tier as a row of moon dots under the icon instead of the ring (a part that isn't there shows
+        /// only empty dots). Tiers above six keep their number.
+        /// </summary>
+        private void ShowMoons(int intensity)
+        {
+            if (_moons == null)
+            {
+                _ringSprite.enabled = false;
+                _ringBase.enabled = false; // the image only: the best score line hangs off this object
+                var row = new GameObject("Moons", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+                row.GetComponent<LayoutElement>().ignoreLayout = true;
+                row.transform.SetParent(transform, false);
+                var layout = row.GetComponent<HorizontalLayoutGroup>();
+                layout.spacing = 4f;
+                layout.childAlignment = TextAnchor.MiddleCenter;
+                layout.childControlWidth = layout.childControlHeight = false;
+                var rect = (RectTransform) row.transform;
+                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+                rect.pivot = new Vector2(0.5f, 1f);
+                rect.anchoredPosition = new Vector2(0f, -8f);
+                rect.sizeDelta = new Vector2(64f, 7f);
+                _moons = new Image[MOONS];
+                for (int i = 0; i < MOONS; i++)
+                {
+                    _moons[i] = Moonlight.Panel("Moon", row.transform, 4, Color.white);
+                    _moons[i].rectTransform.sizeDelta = new Vector2(7f, 7f);
+                }
+            }
+            for (int i = 0; i < MOONS; i++)
+            {
+                _moons[i].color = _active && i < intensity ? Moonlight.Moon : Moonlight.Keycap;
+            }
         }
 
         /// <summary>

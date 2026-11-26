@@ -181,7 +181,7 @@ namespace YARG.Menu.Persistent
 
             dialog.ClearButtons();
             dialog.AddDialogButton("Menu.Common.Cancel", MenuData.Colors.CancelButton, ClearDialog);
-            dialog.AddDialogButton("Menu.Common.Confirm", MenuData.Colors.ConfirmButton, SubmitAndClearDialog);
+            dialog.AddDialogButton("Menu.Common.Save", MenuData.Colors.ConfirmButton, SubmitAndClearDialog);
 
             // Make the dialog input field active so no mouse is required
             dialog.ActivateInputField();
@@ -249,6 +249,7 @@ namespace YARG.Menu.Persistent
 
             var dialog = Instantiate(prefab, _dialogContainer);
             _currentDialog = dialog;
+            DialogMoonlight.Attach(dialog);
 
             dialog.ClearButtons();
             dialog.AddDialogButton("Menu.Common.Close", MenuData.Colors.CancelButton, ClearDialog);

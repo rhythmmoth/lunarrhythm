@@ -36,6 +36,26 @@ namespace YARG.Gameplay.HUD
 
         private bool _displayActive;
         private int _displayedCountdownValue = int.MinValue;
+        private TextMeshProUGUI _caption;
+
+        // Moonlight (board NextSoloCountdown): a dark disc, a cream ring emptying as the gap passes, the count in
+        // Unbounded, and what it counts underneath ("Get ready" in the last one)
+        protected override void GameplayAwake()
+        {
+            _backgroundCircle.color = new Color(0.024f, 0.04f, 0.11f, 0.88f);
+            _progressBar.color = Menu.Moonlight.Moon;
+            if (Menu.Moonlight.Heading != null) _countdownText.font = Menu.Moonlight.Heading;
+            _countdownText.color = Menu.Moonlight.Moon;
+            _caption = Menu.Moonlight.Label("Caption", _backgroundCircle.transform.parent, Menu.Moonlight.Body, 20f, Menu.Moonlight.Text);
+            _caption.fontWeight = FontWeight.Bold;
+            _caption.alignment = TextAlignmentOptions.Top;
+            var circle = _backgroundCircle.rectTransform;
+            var rect = _caption.rectTransform;
+            rect.anchorMin = rect.anchorMax = circle.anchorMin;
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = circle.anchoredPosition + new Vector2(0f, -circle.rect.height * (1f - circle.pivot.y) - 8f);
+            rect.sizeDelta = new Vector2(360f, 30f);
+        }
 
         public void UpdateCountdown(double countdownLength, double endTime)
         {
@@ -111,6 +131,11 @@ namespace YARG.Gameplay.HUD
 
             _displayedCountdownValue = value;
             _countdownText.SetText(value.ToString());
+            if (_caption != null)
+            {
+                _caption.text = value <= 1 ? "Get ready"
+                    : DisplayStyle == CountdownDisplayMode.Measures ? "Measures until you're back in" : "Seconds until you're back in";
+            }
         }
 
         private void ToggleDisplay(bool isActive)

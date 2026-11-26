@@ -124,6 +124,45 @@
             "Detected": "Detected",
             "NotEnoughData": "There isn't enough data to get an accurate result.\nPress back to exit."
         },
+        "Pause": {
+            "Resume": "Resume"
+        },
+        "Profile": {
+            "Equip": "Equip",
+            "Challenges": "Challenges"
+        },
+        "Lobby": {
+            "Create": "Make a lobby",
+            "Private": "Private",
+            "JoinCode": "Join by code",
+            "Join": "Join",
+            "Ready": "Ready",
+            "Unready": "Unready",
+            "Pick": "Pick or replace",
+            "Instrument": "Instrument",
+            "Difficulty": "Difficulty",
+            "Leave": "Leave",
+            "LeaveSetlist": "Leave setlist",
+            "AddToSetlist": "Add to setlist",
+            "BackToLobby": "Back to the lobby",
+            "Tab": "Season / featured / all"
+        },
+        "GlobalLeaderboard": {
+            "Switch": "All time / season",
+            "JumpToYou": "Jump to you",
+            "ViewProfile": "View profile"
+        },
+        "Players": {
+            "Edit": "Edit",
+            "Connect": "Connect",
+            "Add": "Add a player",
+            "Disconnect": "Disconnect",
+            "Delete": "Delete",
+            "Move": "Move up / down",
+            "Change": "Change",
+            "Done": "Done",
+            "Adjust": "Adjust"
+        },
         "Common": {
             "Apply": "Apply",
             "Back": "Back",
@@ -294,16 +333,20 @@
             "Options": {
                 "Quickplay": "Play",
                 "Practice": "Practice",
-                "Profiles": "Profiles",
+                "Leaderboard": "Leaderboard",
+                "Online": "Play online",
+                "Challenges": "Challenges",
+                "Profiles": "Players",
                 "History": "History",
                 "Settings": "Settings",
                 "Credits": "Credits",
                 "Exit": "Exit"
             },
-            "GoToCurrentlyPlaying": "Go To Currently Playing"
+            "GoToCurrentlyPlaying": "Play This Song",
+            "Profile": "Profile"
         },
         "MusicLibrary": {
-            "Name": "Music Library",
+            "Name": "Music library",
             "NoSongsMatchCriteria": "NO SONGS MATCH CRITERIA",
             "SearchResults": "SEARCH RESULTS",
             "AllSongs": "ALL SONGS",
@@ -325,43 +368,48 @@
                     "SelectPlaylists": "Select Playlists"
                 },
                 "Item": {
-                    "RandomSong": "Random Song",
-                    "BackToTop": "Back to Top",
-                    "ScanSongs": "Scan Songs",
+                    "RandomSong": "Random song",
+                    "BackToTop": "Back to top",
+                    "ScanSongs": "Refresh the song list",
                     "SortBy": "Sort By: {0}",
-                    "GoToSection": "Go To Section...",
-                    "AddToFavorites": "Add To Favorites",
-                    "RemoveFromFavorites": "Remove From Favorites",
-                    "AddToPlaylist": "Add To Playlist...",
-                    "RemoveFromPlaylist": "Remove From Playlist",
-                    "RemoveFromSetlist": "Remove From Setlist",
+                    "GoToSection": "Go to section…",
+                    "AddToFavorites": "Add to favourites",
+                    "RemoveFromFavorites": "Remove from favourites",
+                    "AddToPlaylist": "Add to playlist…",
+                    "RemoveFromPlaylist": "Remove from playlist",
+                    "RemoveFromSetlist": "Remove from setlist",
                     "CreateNewPlaylist": "Create New...",
-                    "RenamePlaylist": "Rename Playlist",
-                    "DeletePlaylist": "Delete Playlist",
-                    "DeleteSetlist": "Delete Setlist",
-                    "ViewSongFolder": "View Song Folder",
-                    "CopySongChecksum": "Copy Song Checksum",
-                    "CollapseAll": "Collapse All",
-                    "ExpandAll": "Expand All"
+                    "RenamePlaylist": "Rename playlist",
+                    "DeletePlaylist": "Delete playlist",
+                    "DeleteSetlist": "Delete setlist",
+                    "ViewSongFolder": "View song folder",
+                    "CopySongChecksum": "Copy song checksum",
+                    "CollapseAll": "Collapse all",
+                    "ExpandAll": "Expand all"
                 }
             },
             "Back": "BACK",
             "NoPlayersConnected": "No players connected! Go to the profiles menu to connect a player.",
             "Play": "Play Song",
-            "PlayHoldAddToSet": "<align=left>Play Song<br><size=67%>(Hold) Add To Setlist</size></align>",
-            "AddHoldStartSet": "<align=left>Add to Setlist<br><size=67%>(Hold) Start The Set</size></align>",
-            "ExpandHeaderHoldAddToSet": "<align=left>Expand Header</align>",
-            "CollapseHeaderHoldAddToSet": "<align=left>Collapse Header</align>",
-            "ExpandHeaderHoldStartSet": "<align=left>Expand Header<br><size=67%>(Hold) Start The Set</size></align>",
-            "CollapseHeaderHoldStartSet": "<align=left>Collapse Header<br><size=67%>(Hold) Start The Set</size></align>",
+            "PlayHoldAddToSet": "Play song<size=76%><color=#4A4F6A> · hold to add to setlist</color></size>",
+            "AddHoldStartSet": "Add to setlist<size=76%><color=#4A4F6A> · hold to start the set</color></size>",
+            "ExpandHeaderHoldAddToSet": "Expand section",
+            "CollapseHeaderHoldAddToSet": "Collapse section",
+            "ExpandHeaderHoldStartSet": "Expand section<size=76%><color=#4A4F6A> · hold to start the set</color></size>",
+            "CollapseHeaderHoldStartSet": "Collapse section<size=76%><color=#4A4F6A> · hold to start the set</color></size>",
             "Search": "Search",
-            "SkipSection": "<align=left>Navigate Sections</align>",
+            "SkipSection": "Jump to section",
+            "Footer": {
+                "Play": "Play",
+                "SongOptions": "Song options",
+                "Choose": "Choose"
+            },
             "MoveInPlaylist": "Move Song",
             "CurrentSetlist": "Current Setlist",
-            "AddToSet": "Add To Setlist",
+            "AddToSet": "Add to setlist",
             "AddedToSet": "Added To Setlist",
             "PlaylistAddedToSet": "Added {0:N0} Songs From Playlist To Setlist",
-            "StartSet": "Start The Set",
+            "StartSet": "Start the set",
             "PlayShow": "Play A Show",
             "Filters": "Filters",
             "NoSongsInPlaylist": "No Songs In Playlist",
@@ -487,7 +535,7 @@
             }
         },
         "ProfileList": {
-            "Name": "Profiles",
+            "Name": "Players",
             "ActiveProfiles" : "Active Profiles",
             "AddBot": "Add Bot",
             "AddProfile": "Add Profile",
@@ -495,6 +543,8 @@
             "Players" : "Players"
         },
         "ScoreScreen" : {
+            "PlayAgain": "Play again",
+            "SongLeaderboard": "Song leaderboard",
             "BandScoreNotSaved" : "Score not saved",
             "RestartSong" : "Restart Song",
             "ShowAdvanced": "Show Advanced",
@@ -502,6 +552,7 @@
             "EndSetlistEarly" : "End Setlist"
         },
         "Settings": {
+            "SwitchTab": "Switch tab",
             "ShowAdvanced": "Show Advanced",
             "HideAdvanced": "Hide Advanced",
             "NoFolder": "<i>No Folder</i>",
@@ -589,15 +640,15 @@
     },
     "Gameplay": {
         "Notifications": {
-            "BassGroove": "BASS GROOVE",
+            "BassGroove": "Bass groove",
             "CountdownGetReady": "Get Ready!",
-            "FullCombo": "FULL COMBO",
-            "HotStart": "HOT START",
-            "NewHighScore": "NEW HIGH SCORE",
-            "NoteStreak": "{0:N0}-NOTE STREAK",
-			"PhraseStreak": "{0:N0}-PHRASE STREAK",
-            "StarPowerReady": "OVERDRIVE READY",
-            "StrongFinish": "STRONG FINISH"
+            "FullCombo": "Full combo",
+            "HotStart": "Hot start",
+            "NewHighScore": "New high score",
+            "NoteStreak": "{0:N0} note streak",
+			"PhraseStreak": "{0:N0} phrase streak",
+            "StarPowerReady": "Overdrive ready",
+            "StrongFinish": "Strong finish"
         },
         "Solo": {
             "Performance": {
@@ -941,7 +992,8 @@
             "Cache": "Cache",
             "Venues": "Venues/Backgrounds",
             "Calibration": "Calibration",
-            "Leaderboards": "Leaderboards",
+            "Leaderboards": "Account",
+            "Help": "Help",
             "Input": "Input",
             "PresetSettings": "Preset Settings",
             "Debug": "Debug",
@@ -973,6 +1025,7 @@
             "ExportSongsCsv": "CSV",
             "SignInWithDiscord": "Sign In With Discord",
             "SignOutOfLeaderboards": "Sign Out",
+            "ReplayTour": "Replay the Tour",
             "OpenCalibrator": "Open Calibrator",
             "OpenVenueFolder": "Open Backgrounds/Venue Folder",
             "AddFolder": "Add Folder",
@@ -1071,7 +1124,7 @@
                 "Description": "Choose how LunarRhythm shows on your activity status on Discord.",
                 "Dropdown": {
                     "Show": "Show all details",
-                    "Limited": "Show without the currently playing song",
+                    "Limited": "Only \"In the menus\"",
                     "Hide": "Hide"
                 }
             },
@@ -1426,6 +1479,42 @@
                 "Name": "Song Background Opacity",
                 "Description": "Adjusts the opacity of background during gameplay."
             },
+            "GameBackground": {
+                "Name": "Gameplay Background",
+                "Description": "What plays behind the highway. Visualizer moves with the song. Song Video uses a song's own video or venue when it has one (the visualizer otherwise). Moonlight uses the menus' background.",
+                "Dropdown": {
+                    "Visualizer": "Visualizer",
+                    "SongVideo": "Song Video / Venue",
+                    "Moonlight": "Moonlight"
+                }
+            },
+            "VisualizerStyle": {
+                "Name": "Visualizer Style",
+                "Description": "Auto picks a style from the song's genre: each major genre has its own, and every subgenre uses its major genre's.",
+                "Dropdown": {
+                    "Auto": "Auto",
+                    "Tide": "Tide",
+                    "Pulse": "Pulse",
+                    "Meteor": "Meteor",
+                    "Aurora": "Aurora",
+                    "Searchlights": "Searchlights",
+                    "Shatter": "Shatter",
+                    "Grid": "Grid",
+                    "Skyline": "Skyline",
+                    "Glow": "Glow",
+                    "Smoke": "Smoke",
+                    "Fireflies": "Fireflies",
+                    "Constellations": "Constellations"
+                }
+            },
+            "TrackOpacity": {
+                "Name": "Track Opacity",
+                "Description": "How solid the highway's coloured lanes are. Lower it to see the background through them; notes, lane lines and the strike line stay as they are."
+            },
+            "VisualizerIntensity": {
+                "Name": "Visualizer Intensity",
+                "Description": "How strongly the visualizer moves and glows."
+            },
             "UseChipmunkSpeed": {
                 "Name": "Chipmunk Speed",
                 "Description": "Disables pitch correction when playing songs at a fast or slow speed which may lead to some... interesting results."
@@ -1664,6 +1753,15 @@
                 "Name": "Wrap-Around Navigation",
                 "Description": "Allow menus to jump to the bottom of a list when scrolling past the top, or jump to the top of a list when scrolling past the bottom."
             },
+            "MenuAnimations": {
+                "Name": "Menu Animations",
+                "Description": "How menus move when they open and close. Reduced keeps only the fades; Off switches menus instantly.",
+                "Dropdown": {
+                    "On": "On",
+                    "Reduced": "Reduced",
+                    "Off": "Off"
+                }
+            },
             "ReduceNoteSpeedByDifficulty": {
                 "Name": "Reduce Note Speed by Difficulty",
                 "Description": "Reduces the note speed if playing on a lower difficulty than Expert. The specified note speed is applied to Expert, and lower difficulties receive a reduction in speed. This setting does not affect vocal tracks."
@@ -1684,6 +1782,10 @@
                 "Name": "Use Three Lyric Lanes In Harmony",
                 "Description": "If enabled, the game will display three lyric lanes in harmony mode (one for each harmony). When disabled, the game will combine the lyrics of harmonies 2 and 3 into one lane at the top."
             },
+            "FlatHighway": {
+                "Name": "2D Highway",
+                "Description": "If enabled, notes come straight down a flat highway. Turn it off for the classic 3D highway. Changes apply from the next song."
+            },
             "EnableTrackEffects": {
                 "Name": "Enable Track Effects",
                 "Description": "If enabled, the game will display track effects for unison, solo, and drum SP activation phrases."
@@ -1691,6 +1793,10 @@
             "EnableHighwayAnimation": {
                 "Name": "Enable Highway Animation",
                 "Description": "If enabled, the highway will animate at the beginning and end of the song and based on performance."
+            },
+            "LiftConnectors": {
+                "Name": "Lift Connectors",
+                "Description": "If enabled, a soft beam leads from each lift note down to the note you're holding, so you can see when to let go."
             },
             "EnableVoxSamples": {
                 "Name": "Enable Vox Samples",

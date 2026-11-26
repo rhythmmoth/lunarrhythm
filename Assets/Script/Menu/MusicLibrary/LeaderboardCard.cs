@@ -11,30 +11,23 @@ namespace YARG.Menu.MusicLibrary
     /// <summary>The music library sidebar's leaderboard: the top runs of the selected song for one instrument.</summary>
     public class LeaderboardCard : MonoBehaviour
     {
-        private const float PAD = 10f;
-        private const float HEADER = 34f;
-        private const float ROW = 36f;
-        private const float GAP = 4f;
-        private const float DIVIDER = 18f;
+        // The Moonlight board's "TOP SCORES · LEAD" list, ×1.5: no card, small caps label, plain rows
+        private const float PAD = 0f;
+        private const float HEADER = 27f;
+        private const float ROW = 27f;
+        private const float GAP = 10.5f;
+        private const float DIVIDER = 10.5f;
         private const float BOARD_CACHE_SECONDS = 60f;
 
-        private static readonly Color CardColor = new(0.063f, 0.055f, 0.106f);
-        private static readonly Color Accent = new(0.8f, 0.69f, 1f);
-        private static readonly Color Muted = new(0.56f, 0.53f, 0.69f);
-        private static readonly Color Dim = new(0.36f, 0.34f, 0.47f);
-        private static readonly Color AvatarColor = new(0.13f, 0.11f, 0.23f);
-        private static readonly Color TagColor = new(0.12f, 0.1f, 0.2f);
-        private static readonly Color MeColor = new(0.23f, 0.1f, 0.53f);
-        private static readonly Color MeOutline = new(0.48f, 0.31f, 0.94f);
-        private static readonly (Color Fill, Color Text, Color Row)[] Medals =
+        private static readonly Color Muted = Moonlight.Muted;
+        private static readonly Color Dim = Moonlight.Faint;
+        internal static readonly (Color Fill, Color Text, Color Row)[] Medals =
         {
-            (new(0.95f, 0.79f, 0.3f), new(0.29f, 0.23f, 0.02f), new(0.11f, 0.094f, 0.19f)),
-            (new(0.79f, 0.81f, 0.85f), new(0.17f, 0.19f, 0.22f), new(0.09f, 0.078f, 0.165f)),
-            (new(0.82f, 0.55f, 0.36f), new(0.29f, 0.15f, 0.06f), new(0.09f, 0.078f, 0.165f)),
+            (new(0.95f, 0.79f, 0.3f), new(0.29f, 0.23f, 0.02f), Color.clear),
+            (new(0.79f, 0.81f, 0.85f), new(0.17f, 0.19f, 0.22f), Color.clear),
+            (new(0.82f, 0.55f, 0.36f), new(0.29f, 0.15f, 0.06f), Color.clear),
         };
 
-        private static Sprite _rounded;
-        private static Sprite _circle;
         // Kept for the whole session: a few dozen 64px pictures at most
         private static readonly Dictionary<string, Texture2D> Avatars = new();
         private static readonly Dictionary<string, (float Time, Leaderboards.Board Board)> Boards = new();
@@ -47,8 +40,6 @@ namespace YARG.Menu.MusicLibrary
         public static LeaderboardCard Create(Transform parent, TMP_FontAsset font)
         {
             // Unity-null checks, not ??=: runtime assets can be unloaded between scenes
-            if (_rounded == null) _rounded = MakeRounded(32, 12);
-            if (_circle == null) _circle = MakeRounded(64, 32);
 
             // The sidebar's column stretches its children edge to edge; the holder takes that, the card sits inset
             var holder = new GameObject("Leaderboard", typeof(RectTransform), typeof(LayoutElement));
@@ -57,26 +48,16 @@ namespace YARG.Menu.MusicLibrary
             layout.flexibleHeight = 1f;
             layout.minHeight = 160f;
 
-            var rect = Box("Card", holder.transform, CardColor);
-            Stretch(rect);
-            rect.offsetMin = new Vector2(15f, 14f);
-            rect.offsetMax = new Vector2(-15f, -6f);
+            var rect = (RectTransform) holder.transform;
 
             var card = holder.AddComponent<LeaderboardCard>();
             card._font = font;
 
-            var title = card.Text("Title", rect, "LEADERBOARD", 17f, Accent, FontStyles.Bold);
-            title.characterSpacing = 6f;
-            Place(title.rectTransform, PAD + 6f, -PAD, -120f, HEADER);
-
-            var tagBox = Box("Instrument", rect, TagColor);
-            tagBox.anchorMin = tagBox.anchorMax = tagBox.pivot = Vector2.one;
-            tagBox.anchoredPosition = new Vector2(-PAD - 4f, -PAD - 5f);
-            tagBox.sizeDelta = new Vector2(84f, 24f);
-            card._tag = card.Text("Text", tagBox, "", 13f, Muted, FontStyles.Bold);
-            card._tag.alignment = TextAlignmentOptions.Center;
-            card._tag.characterSpacing = 3f;
-            Stretch(card._tag.rectTransform);
+            // "TOP SCORES · LEAD": the instrument is part of the label
+            card._tag = card.Text("Title", rect, "", 18f, Muted, FontStyles.Normal);
+            card._tag.fontWeight = FontWeight.SemiBold;
+            card._tag.characterSpacing = 14f;
+            Place(card._tag.rectTransform, 0f, 0f, 0f, HEADER);
 
             card._body = new GameObject("Body", typeof(RectTransform)).GetComponent<RectTransform>();
             card._body.SetParent(rect, false);
@@ -89,7 +70,7 @@ namespace YARG.Menu.MusicLibrary
         /// <summary>Shows a song's board. Pass a null shortname for songs that can't have one.</summary>
         public void Show(string shortname, string instrument, string label)
         {
-            _tag.text = label;
+            _tag.text = "TOP SCORES · " + label;
             Cancel();
             Clear();
             if (shortname == null)
@@ -184,101 +165,46 @@ namespace YARG.Menu.MusicLibrary
             }
             else if (me == null && !Leaderboards.SignedIn)
             {
-                var hint = Text("Hint", _body, "Sign in with Discord in Settings to appear here.", 14f, Dim, FontStyles.Normal);
-                hint.alignment = TextAlignmentOptions.Center;
+                var hint = Text("Hint", _body, "Sign in with Discord in Settings to appear here.", 19.5f, Dim, FontStyles.Normal);
+                hint.alignment = TextAlignmentOptions.MidlineLeft;
                 Place(hint.rectTransform, 0f, y - 6f, 0f, ROW);
             }
         }
 
         private void Row(Leaderboards.Entry entry, float top, bool isMe)
         {
-            int medal = entry.Rank - 1;
-            RectTransform row;
-            if (isMe)
-            {
-                var outline = Box("Row", _body, MeOutline);
-                Place(outline, 0f, top, 0f, ROW);
-                row = Box("Fill", outline, MeColor);
-                Stretch(row);
-                row.offsetMin = new Vector2(1.5f, 1.5f);
-                row.offsetMax = new Vector2(-1.5f, -1.5f);
-            }
-            else
-            {
-                row = Box("Row", _body, medal is >= 0 and < 3 ? Medals[medal].Row : Color.clear);
-                Place(row, 0f, top, 0f, ROW);
-            }
+            // Rank and name on the left, the score on the right; your own row in moon cream
+            var row = new GameObject("Row", typeof(RectTransform)).GetComponent<RectTransform>();
+            row.SetParent(_body, false);
+            Place(row, 0f, top, 0f, ROW);
+            var color = isMe ? Moonlight.Moon : Moonlight.Text;
 
-            // Rank: a medal for the top three
-            var rank = Circle("Rank", row, medal is >= 0 and < 3 ? Medals[medal].Fill : Color.clear, 8f, 24f);
-            var rankText = Text("Text", rank, entry.Rank.ToString(), 13f,
-                medal is >= 0 and < 3 ? Medals[medal].Text : isMe ? Color.white : Muted, FontStyles.Bold);
-            rankText.alignment = TextAlignmentOptions.Center;
-            Stretch(rankText.rectTransform);
+            var rank = Text("Rank", row, entry.Rank.ToString(), 22.5f, isMe ? Moonlight.Moon : Moonlight.Faint,
+                FontStyles.Normal);
+            rank.rectTransform.anchorMin = Vector2.zero;
+            rank.rectTransform.anchorMax = new Vector2(0f, 1f);
+            rank.rectTransform.pivot = new Vector2(0f, 0.5f);
+            rank.rectTransform.sizeDelta = new Vector2(rank.preferredWidth + 2f, 0f);
 
-            // Avatar, with the initial behind it until (or unless) the picture loads
-            var avatar = Circle("Avatar", row, isMe ? Accent : AvatarColor, 40f, 28f);
-            var initial = Text("Initial", avatar, entry.Name.Length > 0 ? entry.Name[..1].ToUpperInvariant() : "?", 13f,
-                isMe ? MeColor : Accent, FontStyles.Bold);
-            initial.alignment = TextAlignmentOptions.Center;
-            Stretch(initial.rectTransform);
-            if (entry.Avatar != null)
-            {
-                avatar.gameObject.AddComponent<Mask>().showMaskGraphic = true;
-                var picture = new GameObject("Picture", typeof(RectTransform), typeof(RawImage)).GetComponent<RawImage>();
-                picture.transform.SetParent(avatar, false);
-                picture.raycastTarget = false;
-                Stretch(picture.rectTransform);
-                picture.enabled = false;
-                LoadAvatar(entry.Avatar, picture).Forget();
-            }
+            var name = Text("Name", row, Readable(_font, entry.Name), 22.5f, color, FontStyles.Normal);
+            name.richText = false; // Discord names are anyone's text: no <size> or <sprite> tags
+            Place(name.rectTransform, rank.preferredWidth + 15f, 0f, -150f, ROW);
 
-            var name = Text("Name", row, entry.Name, 15f, Color.white, isMe ? FontStyles.Bold : FontStyles.Normal);
-            Place(name.rectTransform, 78f, 0f, -166f, ROW);
-
-            var tag = Box("Difficulty", row, isMe ? MeOutline : TagColor);
-            tag.anchorMin = tag.anchorMax = tag.pivot = new Vector2(1f, 0.5f);
-            tag.anchoredPosition = new Vector2(-128f, 0f);
-            tag.sizeDelta = new Vector2(28f, 20f);
-            var tagText = Text("Text", tag, DifficultyLetter(entry.Difficulty), 11f, isMe ? Color.white : Accent,
-                FontStyles.Bold);
-            tagText.alignment = TextAlignmentOptions.Center;
-            Stretch(tagText.rectTransform);
-
-            var score = Text("Score", row, entry.Score.ToString("N0"), 15f,
-                isMe || medal is >= 0 and < 3 ? Color.white : new Color(0.81f, 0.79f, 0.89f), FontStyles.Bold);
+            var score = Text("Score", row, entry.Score.ToString("N0"), 22.5f, color, FontStyles.Normal);
+            score.fontWeight = FontWeight.SemiBold;
             score.alignment = TextAlignmentOptions.Right;
-            PlaceRight(score.rectTransform, 40f, 84f);
-
-            if (entry.Fc)
-            {
-                var fc = Text("FC", row, "FC", 11f, Medals[0].Fill, FontStyles.Bold);
-                fc.alignment = TextAlignmentOptions.Center;
-                PlaceRight(fc.rectTransform, 8f, 28f);
-            }
+            PlaceRight(score.rectTransform, 0f, 150f);
         }
 
         private void Divider(float top)
         {
-            var label = Text("You", _body, "YOU", 11f, Dim, FontStyles.Bold);
-            label.alignment = TextAlignmentOptions.Center;
-            label.characterSpacing = 4f;
-            Place(label.rectTransform, 0f, top, 0f, DIVIDER - 4f);
-            foreach (float side in new[] { 0f, 1f })
-            {
-                var line = Box("Line", _body, new Color(0.18f, 0.16f, 0.28f));
-                line.GetComponent<Image>().sprite = null;
-                line.anchorMin = line.anchorMax = new Vector2(side, 1f);
-                line.pivot = new Vector2(side, 0.5f);
-                line.anchoredPosition = new Vector2(0f, top - (DIVIDER - 4f) / 2f);
-                line.sizeDelta = new Vector2(_body.rect.width / 2f - 30f, 1f);
-            }
+            // Just a gap before your own row when you're below the shown ones
         }
 
         private void Message(string text)
         {
-            var message = Text("Message", _body, text, 15f, Muted, FontStyles.Normal);
-            message.alignment = TextAlignmentOptions.Center;
+            var message = Text("Message", _body, text, 21f, Muted, FontStyles.Normal);
+            message.alignment = TextAlignmentOptions.TopLeft;
             message.textWrappingMode = TextWrappingModes.Normal;
             Stretch(message.rectTransform);
         }
@@ -291,7 +217,7 @@ namespace YARG.Menu.MusicLibrary
             }
         }
 
-        private static async UniTaskVoid LoadAvatar(string path, RawImage picture)
+        internal static async UniTaskVoid LoadAvatar(string path, RawImage picture)
         {
             if (!Avatars.TryGetValue(path, out var texture) || texture == null)
             {
@@ -321,13 +247,42 @@ namespace YARG.Menu.MusicLibrary
             }
         }
 
-        private static string DifficultyLetter(string difficulty) => difficulty switch
+        /// <summary>
+        /// A Discord name without the characters the font (and its fallbacks) can't draw, which would show as boxes.
+        /// "Player" if nothing readable is left.
+        /// </summary>
+        internal static string Readable(TMP_FontAsset font, string name)
         {
-            "easy"   => "E",
-            "medium" => "M",
-            "hard"   => "H",
-            _        => "X",
-        };
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return "Player";
+            }
+            if (font == null || font.HasCharacters(name, out uint[] missing, true) || missing == null)
+            {
+                return name;
+            }
+            // By code point, so emoji and other characters outside the BMP go as a whole
+            var kept = new System.Text.StringBuilder(name.Length);
+            for (int i = 0; i < name.Length; i += char.IsSurrogatePair(name, i) ? 2 : 1)
+            {
+                uint code = (uint) char.ConvertToUtf32(name, i);
+                bool space = char.IsWhiteSpace(name, i);
+                if (System.Array.IndexOf(missing, code) >= 0 || (space && (kept.Length == 0 || kept[^1] == ' ')))
+                {
+                    continue;
+                }
+                kept.Append(space ? " " : char.ConvertFromUtf32((int) code));
+            }
+            string result = kept.ToString().Trim();
+            foreach (char c in result)
+            {
+                if (char.IsLetterOrDigit(c))
+                {
+                    return result;
+                }
+            }
+            return "Player";
+        }
 
         private TextMeshProUGUI Text(string name, Transform parent, string text, float size, Color color, FontStyles style)
         {
@@ -343,32 +298,6 @@ namespace YARG.Menu.MusicLibrary
             label.alignment = TextAlignmentOptions.MidlineLeft;
             label.raycastTarget = false;
             return label;
-        }
-
-        private static RectTransform Box(string name, Transform parent, Color color)
-        {
-            var image = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<Image>();
-            image.transform.SetParent(parent, false);
-            image.sprite = _rounded;
-            image.type = Image.Type.Sliced;
-            image.color = color;
-            image.raycastTarget = false;
-            return image.rectTransform;
-        }
-
-        private static RectTransform Circle(string name, Transform parent, Color color, float left, float size)
-        {
-            var image = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<Image>();
-            image.transform.SetParent(parent, false);
-            image.sprite = _circle;
-            image.color = color;
-            image.raycastTarget = false;
-            var rect = image.rectTransform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
-            rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = new Vector2(left, 0f);
-            rect.sizeDelta = new Vector2(size, size);
-            return rect;
         }
 
         /// <summary>Pins a rect to the top of its parent, inset from the left and right edges.</summary>
@@ -399,30 +328,6 @@ namespace YARG.Menu.MusicLibrary
         }
 
         /// <summary>A white rounded square, 9-sliced so it scales to any size; radius = size / 2 is a circle.</summary>
-        private static Sprite MakeRounded(int size, int radius)
-        {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear,
-                hideFlags = HideFlags.DontUnloadUnusedAsset,
-            };
-            var pixels = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    // Distance past the nearest corner's circle, antialiased over a pixel
-                    float dx = Mathf.Max(radius - (x + 0.5f), x + 0.5f - (size - radius), 0f);
-                    float dy = Mathf.Max(radius - (y + 0.5f), y + 0.5f - (size - radius), 0f);
-                    float alpha = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f);
-                    pixels[y * size + x] = new Color32(255, 255, 255, (byte) (alpha * 255));
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
-                SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
-        }
+        internal static Sprite MakeRounded(int size, int radius) => Moonlight.MakeRounded(size, radius);
     }
 }

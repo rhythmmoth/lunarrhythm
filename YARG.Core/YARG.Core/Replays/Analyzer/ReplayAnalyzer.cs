@@ -54,6 +54,26 @@ namespace YARG.Core.Replays.Analyzer
             _replayLength = replayInfo.ReplayLength;
         }
 
+        /// <summary>
+        /// One run checked on its own, without a replay file (the leaderboard server checks submitted runs this way):
+        /// the frame's inputs go through a fresh engine until the chart ends, and the result is compared with the
+        /// stats the frame carries.
+        /// </summary>
+        public static AnalysisResult AnalyzeRun(SongChart chart, ReplayFrame frame)
+        {
+            var analyzer = new ReplayAnalyzer(chart, chart.GetEndTime() + 1);
+            return analyzer.RunFrames(new List<ReplayFrame> { frame })[0];
+        }
+
+        private ReplayAnalyzer(SongChart chart, double length)
+        {
+            _chart = chart;
+            _replayInfo = null!;
+            _replayData = null!;
+            _frameNum = -1;
+            _replayLength = length;
+        }
+
         public static AnalysisResult[] AnalyzeReplay(SongChart chart, ReplayInfo info, ReplayData data, double fps = 0, int frameNum = -1)
         {
             var analyzer = new ReplayAnalyzer(chart, info, data, fps, frameNum);

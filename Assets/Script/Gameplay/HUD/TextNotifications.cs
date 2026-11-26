@@ -1,9 +1,10 @@
-﻿using DG.Tweening;
+using DG.Tweening;
 using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using YARG.Helpers.Extensions;
 using YARG.Settings;
 
 namespace YARG.Gameplay.HUD
@@ -94,6 +95,83 @@ namespace YARG.Gameplay.HUD
             _containerRect.localScale = Vector3.zero;
             _containerRect.gameObject.SetActive(true);
             _notificationBackground.gameObject.SetActive(true);
+
+            // The Moonlight board's callouts: plain moon-cream Unbounded, no badge behind
+            // (the hit judgement prefab shares this script and keeps its own look)
+            if (name != "Text Notifications") return;
+            _notificationBackground.enabled = false;
+            if (YARG.Menu.Moonlight.Heading != null) _text.font = YARG.Menu.Moonlight.Heading;
+            _text.fontWeight = FontWeight.Medium;
+            _text.fontStyle = FontStyles.Normal;
+            _text.fontSize = 33f;
+            _text.color = YARG.Menu.Moonlight.Moon;
+
+            // So the letters read over the visualizer's moon and lights: a dark edge on each letter, and a soft patch of
+            // night behind the words (shade, not a badge)
+            var material = _text.fontMaterial;
+            material.EnableKeyword(ShaderUtilities.Keyword_Underlay);
+            material.SetColor(ShaderUtilities.ID_UnderlayColor, YARG.Menu.Moonlight.Night);
+            material.SetFloat(ShaderUtilities.ID_UnderlayDilate, 1f);
+            material.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0.3f);
+            material.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0f);
+            material.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, 0f);
+            if (_shade == null)
+            {
+                _shade = new GameObject("Shade", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+                _shade.transform.SetParent(_text.transform.parent, false);
+                _shade.transform.SetSiblingIndex(_text.transform.GetSiblingIndex());
+                _shade.sprite = SoftSprite;
+                _shade.color = YARG.Menu.Moonlight.Night.WithAlpha(0.8f);
+                _shade.raycastTarget = false;
+            }
+            FitShade();
+        }
+
+        private Image _shade;
+        private static Sprite _softSprite;
+
+        /// <summary>A soft oval, dark in the middle and fading to nothing at the edge.</summary>
+        private static Sprite SoftSprite
+        {
+            get
+            {
+                if (_softSprite != null) return _softSprite;
+                const int w = 128, h = 64;
+                var texture = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+                var pixels = new Color32[w * h];
+                for (int y = 0; y < h; y++)
+                {
+                    for (int x = 0; x < w; x++)
+                    {
+                        float dx = (x + 0.5f) / w * 2f - 1f, dy = (y + 0.5f) / h * 2f - 1f;
+                        float a = 1f - Mathf.SmoothStep(0.25f, 1f, Mathf.Sqrt(dx * dx + dy * dy));
+                        pixels[y * w + x] = new Color32(255, 255, 255, (byte) (a * 255f));
+                    }
+                }
+                texture.SetPixels32(pixels);
+                texture.Apply();
+                return _softSprite = Sprite.Create(texture, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+            }
+        }
+
+        // The shade sits behind the words, sized to them
+        private void FitShade()
+        {
+            if (_shade == null) return;
+            bool show = !string.IsNullOrEmpty(_text.text);
+            _shade.enabled = show;
+            if (!show) return;
+            var text = _text.rectTransform;
+            var shade = _shade.rectTransform;
+            shade.anchorMin = text.anchorMin;
+            shade.anchorMax = text.anchorMax;
+            shade.pivot = text.pivot;
+            shade.anchoredPosition = text.anchoredPosition;
+            shade.localScale = text.localScale;
+            shade.sizeDelta = text.sizeDelta;
+            // Grow it from the text's own box to the words' width plus a soft margin
+            float extraX = _text.preferredWidth + 140f - text.rect.width, extraY = 120f - text.rect.height;
+            shade.sizeDelta += new Vector2(extraX, extraY);
         }
 
         private void OnDisable()
@@ -235,9 +313,11 @@ namespace YARG.Gameplay.HUD
         private IEnumerator ShowNextNotification(string notificationText)
         {
             _text.text = notificationText;
+            FitShade();
             yield return _animationSequence.WaitForCompletion();
 
             _text.text = string.Empty;
+            FitShade();
             _coroutine = null;
         }
 

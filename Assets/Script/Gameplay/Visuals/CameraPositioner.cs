@@ -126,6 +126,7 @@ namespace YARG.Gameplay.Visuals
 
         public void Lower(bool isGameplayEnd)
         {
+            if (FlatHighway.Enabled) return; // the flat view never tilts away
             if (_highwayRaised)
             {
                 LowerHighway(isGameplayEnd);
@@ -135,6 +136,7 @@ namespace YARG.Gameplay.Visuals
 
         public void Raise(bool isGameplayStart)
         {
+            if (FlatHighway.Enabled) return;
             if (!_highwayRaised)
             {
                 RaiseHighway(isGameplayStart);
@@ -154,7 +156,8 @@ namespace YARG.Gameplay.Visuals
 
         private void InitializeSequences()
         {
-            if (!SettingsManager.Settings.EnableHighwayAnimation.Value)
+            // The flat highway looks straight down: tilting it in, bouncing or punching it would break the 2D view
+            if (!SettingsManager.Settings.EnableHighwayAnimation.Value || FlatHighway.Enabled)
             {
                 // If animations are disabled, just make empty sequences
                 _raise = DOTween.Sequence().SetAutoKill(false).Pause().SetLink(gameObject);

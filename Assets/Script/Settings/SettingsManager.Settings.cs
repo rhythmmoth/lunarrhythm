@@ -63,6 +63,10 @@ namespace YARG.Settings
 
 
             public bool ShowAntiPiracyDialog = true;
+
+            // Older builds forced Rich Presence off on every launch, so their saved "Hide" was never a choice: turned on
+            // once (board NextPresence), then left as the player sets it
+            public bool DiscordPresenceDefaulted = false;
             public bool ShowEngineInconsistencyDialog = true;
             public bool ShowExperimentalWarningDialog = true;
 
@@ -149,10 +153,17 @@ namespace YARG.Settings
             public ToggleSetting MuteOnFocusLoss { get; } = new(false);
 
             public ToggleSetting WrapAroundNavigation { get; } = new(true);
+
+            public DropdownSetting<YARG.Menu.MenuAnimationMode> MenuAnimations { get; } = new(YARG.Menu.MenuAnimationMode.On)
+            {
+                YARG.Menu.MenuAnimationMode.On,
+                YARG.Menu.MenuAnimationMode.Reduced,
+                YARG.Menu.MenuAnimationMode.Off
+            };
             public ToggleSetting OverdriveHitsNotes { get; } = new(true);
 
             public DropdownSetting<DiscordRichPresenceMode> DiscordRichPresence { get; }
-                = new(DiscordRichPresenceMode.Hide, DiscordRichPresenceCallback)
+                = new(DiscordRichPresenceMode.Show, DiscordRichPresenceCallback)
                 {
                     DiscordRichPresenceMode.Show,
                     DiscordRichPresenceMode.Limited,
@@ -379,10 +390,41 @@ namespace YARG.Settings
                 };
 
             public SliderSetting SongBackgroundOpacity { get; } = new(1f, 0f, 1f);
+
+            public DropdownSetting<YARG.Gameplay.Visuals.GameBackgroundMode> GameBackground { get; } =
+                new(YARG.Gameplay.Visuals.GameBackgroundMode.Visualizer)
+                {
+                    YARG.Gameplay.Visuals.GameBackgroundMode.Visualizer,
+                    YARG.Gameplay.Visuals.GameBackgroundMode.SongVideo,
+                    YARG.Gameplay.Visuals.GameBackgroundMode.Moonlight
+                };
+
+            public DropdownSetting<YARG.Gameplay.Visuals.VisualizerStyle> VisualizerStyle { get; } =
+                new(YARG.Gameplay.Visuals.VisualizerStyle.Auto)
+                {
+                    YARG.Gameplay.Visuals.VisualizerStyle.Auto,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Tide,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Pulse,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Meteor,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Aurora,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Searchlights,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Shatter,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Grid,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Skyline,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Glow,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Smoke,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Fireflies,
+                    YARG.Gameplay.Visuals.VisualizerStyle.Constellations
+                };
+
+            public SliderSetting VisualizerIntensity { get; } = new(1f, 0f, 1f);
+            public SliderSetting TrackOpacity { get; } = new(1f, 0f, 1f);
             public ToggleSetting StaticVocalsMode { get; } = new(false);
             public ToggleSetting UseThreeLaneLyricsInHarmony { get; } = new(true);
+            public ToggleSetting FlatHighway { get; } = new(true);
             public ToggleSetting EnableTrackEffects { get; } = new(true);
             public ToggleSetting EnableHighwayAnimation { get; } = new(true);
+            public ToggleSetting LiftConnectors { get; } = new(true);
             public SliderSetting KickBounceMultiplier { get; } = new(1f, 0f, 2f);
             public SliderSetting HighwayTiltMultiplier { get; } = new(0.5f, 0f, 0.85f);
 
@@ -437,7 +479,7 @@ namespace YARG.Settings
 
             public ToggleSetting GraphicalProgressOnScoreBox { get; } = new(true);
 
-            public ToggleSetting KeepSongInfoVisible { get; } = new(false);
+            public ToggleSetting KeepSongInfoVisible { get; } = new(true);
 
             #endregion
 
@@ -498,6 +540,15 @@ namespace YARG.Settings
                 if (SettingsMenu.Instance != null && SettingsMenu.Instance.gameObject.activeInHierarchy)
                 {
                     SettingsMenu.Instance.RefreshAndKeepPosition();
+                }
+            }
+
+            /// <summary>The first-time tour again (board NextTutorial), from the title screen.</summary>
+            public void ReplayTour()
+            {
+                if (!YARG.Menu.Main.FirstRunTour.Replay())
+                {
+                    ToastManager.ToastInformation("The tour starts from the title screen.");
                 }
             }
 

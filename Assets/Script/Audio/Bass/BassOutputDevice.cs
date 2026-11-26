@@ -24,14 +24,16 @@ namespace YARG.Audio.BASS
                         return null;
                     }
                 }
+
+                // Inside the try: after a crash the device can come back "Already" initialised with no current
+                // device on this thread, and a throw here would stop the whole startup (no settings, no menus)
+                return new BassOutputDevice(deviceId >= 0 ? deviceId : Bass.CurrentDevice, name);
             }
             catch (BassException e)
             {
                 YargLogger.LogException(e);
                 return null;
             }
-
-            return new BassOutputDevice(Bass.CurrentDevice, name);
         }
 
         public BassOutputDevice Use()

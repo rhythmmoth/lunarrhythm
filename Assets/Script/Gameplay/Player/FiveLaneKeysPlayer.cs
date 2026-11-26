@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
@@ -129,16 +130,10 @@ public override bool ShouldUpdateInputsOnResume => true;
 
         /// See <see cref="StarMultiplierThresholds"/>
         // Lowered for Festival scoring (no unison bonus, delayed multiplier)
-        private static float[] GuitarStarMultiplierThresholds => new[]
-        {
-            0.05f, 0.11f, 0.18f, 0.4f, 0.68f, 1.05f
-        };
+        private static float[] GuitarStarMultiplierThresholds => StarThresholds.FiveLane;
 
         /// See <see cref="StarMultiplierThresholds"/>
-        private static float[] BassStarMultiplierThresholds => new[]
-        {
-            0.05f, 0.11f, 0.18f, 0.4f, 0.68f, 1.05f
-        };
+        private static float[] BassStarMultiplierThresholds => StarThresholds.FiveLane;
 
         public KeysEngineParameters EngineParams { get; private set; }
 
@@ -218,14 +213,16 @@ public override bool ShouldUpdateInputsOnResume => true;
             {
                 OverdriveHitsNotes = SettingsManager.Settings.OverdriveHitsNotes.Value,
             };
-            EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
+            // Others' highways stay out of band scoring, star power and the fail meter
+            if (!Player.IsRemote) EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
 
             HitWindow = EngineParams.HitWindow;
 
             YargLogger.LogFormatDebug("Note count: {0}", NoteTrack.Notes.Count);
 
             engine.OnNoteHit += OnNoteHit;
-            engine.OnHitJudged += TrackView.ShowJudgement;
+            // Perfect, Good and Miss are for the player's own highway; others' would land on their neighbours
+            if (!Player.IsRemote) engine.OnHitJudged += TrackView.ShowJudgement;
             engine.OnNoteMissed += OnNoteMissed;
             engine.OnOverhit += OnOverhit;
 
@@ -471,7 +468,7 @@ public override bool ShouldUpdateInputsOnResume => true;
             if (_sustainCount > 0 && input.GetAction<ProKeysAction>() == ProKeysAction.TouchEffects)
             {
                 WhammyFactor = Mathf.Clamp01(input.Axis);
-                GameManager.ChangeStemWhammyPitch(_stem, WhammyFactor);
+                if (!Player.IsRemote) GameManager.ChangeStemWhammyPitch(_stem, WhammyFactor);
             }
         }
 
@@ -586,6 +583,7 @@ public override bool ShouldUpdateInputsOnResume => true;
         protected override void OnNoteMissed(int index, GuitarNote chordParent)
         {
             base.OnNoteMissed(index, chordParent);
+            if (!Player.IsRemote) TrackView.ShowMiss();
 
             (NotePool.GetByKey(chordParent) as FiveLaneKeysNoteElement)?.MissNote();
         }
@@ -593,6 +591,7 @@ public override bool ShouldUpdateInputsOnResume => true;
         private void OnOverhit(int key)
         {
             OnOverhit();
+            if (!Player.IsRemote) TrackView.ShowMiss();
 
             if (key is (int) FiveLaneKeysAction.OpenNote && !UsingOpenLane)
             {
@@ -636,7 +635,7 @@ public override bool ShouldUpdateInputsOnResume => true;
             if (_sustainCount == 0)
             {
                 WhammyFactor = 0;
-                GameManager.ChangeStemWhammyPitch(_stem, 0);
+                if (!Player.IsRemote) GameManager.ChangeStemWhammyPitch(_stem, 0);
             }
         }
 
@@ -657,7 +656,7 @@ public override bool ShouldUpdateInputsOnResume => true;
 
         public override void SetStemMuteState(bool muted)
         {
-            if (IsStemMuted != muted)
+            if (IsStemMuted != muted && !Player.IsRemote) // others' highways never touch the audio
             {
                 GameManager.ChangeStemMuteState(_stem, muted);
                 IsStemMuted = muted;

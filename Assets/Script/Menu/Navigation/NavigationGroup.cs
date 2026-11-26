@@ -79,12 +79,23 @@ namespace YARG.Menu.Navigation
             }
         }
 
-        private void _AddNavigatable(NavigatableBehaviour navigatable)
+        public int IndexOf(NavigatableBehaviour navigatable) => _navigatables.IndexOf(navigatable);
+
+        /// <summary>Adds a navigatable at a position in the up/down order, for entries added after Awake.</summary>
+        public void InsertNavigatable(int index, NavigatableBehaviour navigatable) =>
+            _AddNavigatable(navigatable, index);
+
+        private void _AddNavigatable(NavigatableBehaviour navigatable, int index = -1)
         {
             if (_navigatables.Contains(navigatable))
                 throw new InvalidOperationException($"Navigation group {this} already contains navigatable {navigatable}!");
 
-            _navigatables.Add(navigatable);
+            index = index < 0 ? _navigatables.Count : Math.Min(index, _navigatables.Count);
+            _navigatables.Insert(index, navigatable);
+            if (SelectedIndex >= index)
+            {
+                SelectedIndex++; // keep the same entry selected
+            }
             navigatable.NavigationGroup = this;
             navigatable.SelectionStateChanged += OnSelectionStateChanged;
         }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using TMPro;
@@ -24,11 +24,13 @@ namespace YARG
 
         private async void Start()
         {
+            LoadingMoonlight.Attach(this);
             using var context = new LoadingContext();
 
             // Load language
             try
             {
+                LoadingMoonlight.Progress = 0.05f;
                 await LocalizationManager.LoadLanguage(context);
             }
             catch (Exception e)
@@ -58,6 +60,7 @@ namespace YARG
             // Load song sources and icons
             try
             {
+                LoadingMoonlight.Progress = 0.15f;
                 await SongSources.LoadSources(context);
             }
             catch (Exception ex)
@@ -68,6 +71,7 @@ namespace YARG
             // Load (sub)genre mappings
             try
             {
+                LoadingMoonlight.Progress = 0.3f;
                 await Genrelizer.LoadGenreMappings(context);
             }
             catch (Exception ex)
@@ -101,6 +105,7 @@ namespace YARG
                 });
             }
 
+            LoadingMoonlight.Progress = 0.5f;
             // Full scan on startup so added/removed songs always show up; unchanged songs still come from the cache
             await SongContainer.RunRefresh(false, context);
         }
@@ -132,6 +137,7 @@ namespace YARG
         {
             LoadingScreen.Instance.gameObject.SetActive(true);
             Navigator.Instance.DisableMenuInputs = true;
+            LoadingMoonlight.Progress = -1f; // a spinning arc until someone knows how far along it is
         }
 
         public void SetLoadingText(string phrase, string sub = null)

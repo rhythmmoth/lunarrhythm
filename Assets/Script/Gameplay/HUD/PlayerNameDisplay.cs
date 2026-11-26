@@ -36,12 +36,13 @@ namespace YARG.Gameplay.HUD
 
         public void ShowPlayer(YargPlayer player)
         {
-            if (!ShouldShowPlayer())
+            if (!ShouldShowPlayer(player))
             {
                 return;
             }
 
             var profile = player.Profile;
+            bool lobby = Menu.Online.LobbyPlay.Playing;
             _playerName.text = profile.Name;
 
             var spriteName = player.GetInstrumentSprite();
@@ -49,12 +50,19 @@ namespace YARG.Gameplay.HUD
                 .LoadAssetAsync<Sprite>(spriteName)
                 .WaitForCompletion();
 
+            gameObject.SetActive(true);
+            StopAllCoroutines();
+            if (lobby)
+            {
+                _canvasGroup.alpha = 1f;
+                return;
+            }
             StartCoroutine(FadeoutCoroutine());
         }
 
         public void ShowPlayer(YargPlayer player, int needleId)
         {
-            if (!ShouldShowPlayer())
+            if (!ShouldShowPlayer(player))
             {
                 return;
             }
@@ -65,9 +73,12 @@ namespace YARG.Gameplay.HUD
             ShowPlayer(player);
         }
 
-        private bool ShouldShowPlayer()
+        // In a lobby only the others' names show, kept up so everyone knows whose highway is whose; yours would be in your way
+        private bool ShouldShowPlayer(YargPlayer player)
         {
-            return !GameManager.IsPractice && SettingsManager.Settings.ShowPlayerNameWhenStartingSong.Value;
+            return Menu.Online.LobbyPlay.Playing
+                ? player.IsRemote
+                : !GameManager.IsPractice && SettingsManager.Settings.ShowPlayerNameWhenStartingSong.Value;
         }
 
         private IEnumerator FadeoutCoroutine()

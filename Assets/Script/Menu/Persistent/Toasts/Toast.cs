@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using DG.Tweening;
 using TMPro;
@@ -14,6 +14,10 @@ namespace YARG.Menu.Persistent
         private const float HOVER_FADE = 0.98f;
 
         private const float SHRINK_DURATION = 0.3f;
+
+        private const float HEIGHT = 78f;
+        private const float GAP = 18f;
+        private const float MAX_TEXT = 780f;
 
         [SerializeField]
         private Image _icon;
@@ -32,14 +36,34 @@ namespace YARG.Menu.Persistent
 
         public void Initialize(string type, string message, Sprite icon, Color color, Action onClick)
         {
-            _background.color = color;
+            // The board's toast: a dark pill with a coloured line icon and one line of text
+            _background.sprite = Moonlight.RoundedSprite(39);
+            _background.type = Image.Type.Sliced;
+            _background.color = new Color(6f / 255f, 10f / 255f, 28f / 255f, 0.94f);
+            _background.rectTransform.offsetMin = new Vector2(0f, GAP); // the gap to the next toast is inside it
+            _background.rectTransform.offsetMax = Vector2.zero;
 
-            _title.text = type;
-            _title.color = color;
+            _title.gameObject.SetActive(false);
             _icon.sprite = icon;
+            _icon.color = color;
+            _icon.rectTransform.anchoredPosition = new Vector2(21f, 0f);
+            _icon.rectTransform.sizeDelta = new Vector2(30f, 30f);
 
-            _message.color = Color.white;
+            if (Moonlight.Body != null) _message.font = Moonlight.Body;
+            _message.fontSize = 22.5f;
+            _message.fontStyle = FontStyles.Normal;
+            _message.color = Moonlight.Text;
             _message.text = message;
+            _message.alignment = TextAlignmentOptions.MidlineLeft;
+            _message.textWrappingMode = TextWrappingModes.NoWrap; // measure the single line first
+            float width = Mathf.Min(_message.GetPreferredValues(message).x, MAX_TEXT);
+            _message.textWrappingMode = TextWrappingModes.Normal;
+            float height = Mathf.Max(HEIGHT, _message.GetPreferredValues(message, width, 0f).y + 24f);
+            var line = _message.GetComponent<LayoutElement>();
+            if (line == null) line = _message.gameObject.AddComponent<LayoutElement>();
+            line.minHeight = line.preferredHeight = height;
+            GetComponent<VerticalLayoutGroup>().padding = new RectOffset(69, 27, 0, (int) GAP);
+            ((RectTransform) transform).sizeDelta = new Vector2(width + 69f + 27f, height + GAP);
 
             _onClick = onClick;
 

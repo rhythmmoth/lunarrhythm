@@ -1,6 +1,8 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using YARG.Core;
 using YARG.Core.Engine;
 using YARG.Gameplay.Visuals;
 using YARG.Helpers.Extensions;
@@ -52,6 +54,7 @@ namespace YARG.Gameplay.HUD
         private const float JUDGEMENT_FADE = 0.25f;
         private static readonly Color PERFECT_COLOR = new(1f, 0.84f, 0.25f);
         private static readonly Color GOOD_COLOR = new(0.6f, 0.85f, 1f);
+        private static readonly Color MISS_COLOR = new(1f, 0.54f, 0.6f);
 
         private TextMeshProUGUI _judgement;
         private float _judgementShownAt = float.NegativeInfinity;
@@ -98,6 +101,19 @@ namespace YARG.Gameplay.HUD
             _judgementShownAt = Time.unscaledTime;
         }
 
+        /// <summary>A missed note, or a press with no note there (it breaks the streak the same way).</summary>
+        public void ShowMiss()
+        {
+            if (_judgement == null)
+            {
+                return;
+            }
+
+            _judgement.text = "MISS";
+            _judgement.color = MISS_COLOR;
+            _judgementShownAt = Time.unscaledTime;
+        }
+
         private void Update()
         {
             if (_judgement == null || _highwayRenderer == null)
@@ -113,7 +129,16 @@ namespace YARG.Gameplay.HUD
                 return;
             }
 
-            // Left edge of the highway near the strikeline, nudged a little further left
+            // Left edge of the highway near the strikeline, nudged a little further left; in a group (a name tag shows)
+            // inside the player's own column instead, just over the strike line, so it never leaves the screen
+            if (_tag != null)
+            {
+                _judgement.alignment = TextAlignmentOptions.Center;
+                _judgement.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                _judgement.transform.position = _highwayRenderer.GetTrackPositionScreenSpace(_highwayIndex, 0.5f, JUDGEMENT_DEPTH * 3f)
+                    is { } middle ? (Vector3) middle : _hiddenPosition;
+                return;
+            }
             var edge = _highwayRenderer.GetTrackPositionScreenSpace(_highwayIndex, 0f, JUDGEMENT_DEPTH);
             _judgement.transform.position = edge.HasValue
                 ? (Vector3) (edge.Value + new Vector2(-12f * Screen.height / 1000f, 0f))
@@ -183,15 +208,17 @@ namespace YARG.Gameplay.HUD
 
             // Place top elements at 100% depth of the track, plus some extra amount above the track.
             var topPosition =
-                _highwayRenderer.GetTrackPositionScreenSpace(highwayIndex, 0.5f, 1.0f)?.AddY(ExtraTopElementOffset)
+                _highwayRenderer.GetTrackPositionScreenSpaceUnflipped(highwayIndex, 0.5f, 1.0f)?.AddY(ExtraTopElementOffset)
                 ?? _hiddenPosition;
+            // The raised highway's far end is near the lyrics: popups stay low enough to clear them
+            if (topPosition.x > -9000f) topPosition.y = Mathf.Min(topPosition.y, Screen.height * 0.82f);
             _topElementContainer.position = topPosition;
         }
 
         private void UpdateCenterHud(int highwayIndex)
         {
             var trackPositionScreenSpace =
-                _highwayRenderer.GetTrackPositionScreenSpace(highwayIndex, 0.5f, CENTER_ELEMENT_DEPTH);
+                _highwayRenderer.GetTrackPositionScreenSpaceUnflipped(highwayIndex, 0.5f, CENTER_ELEMENT_DEPTH);
             var centerPosition = trackPositionScreenSpace ?? _hiddenPosition;
             _centerElementContainer.transform.position = centerPosition;
         }
@@ -268,7 +295,7 @@ namespace YARG.Gameplay.HUD
             _soloBox.EndSolo(soloBonus, () =>
             {
                 // Show text notifications again
-                _textNotifications.SetActive(true);
+                _textNotifications.SetActive(!_quietPopups);
             });
         }
 
@@ -307,6 +334,101 @@ namespace YARG.Gameplay.HUD
             _textNotifications.ShowStrongFinish();
         }
 
+        // ---------- a group's name tag (boards MHighways, NextOnlineHud) ----------
+
+        private RectTransform _tag;
+        private CanvasGroup _tagGroup;
+        private Image _tagEdge;
+        private TextMeshProUGUI _tagName, _tagScore, _tagSub;
+        private string _tagPart, _tagNote;
+        private int _tagShownScore = -1, _tagShownCombo = -1;
+        private bool _tagShownFc;
+        private bool _quietPopups;
+        private static readonly Color TagGold = new(0.949f, 0.788f, 0.298f);
+
+        /// <summary>In a group (online or local), the column's name tag above the highway: name and score, part and
+        /// streak. Yours is outlined. It replaces the name that shows in the middle of the highway.</summary>
+        public void ShowTag(YargPlayer player, bool mine)
+        {
+            if (_tag == null) BuildTag();
+            _tagName.text = player.Profile.Name;
+            _tagName.color = mine ? Menu.Moonlight.Moon : Menu.Moonlight.Text;
+            _tagEdge.enabled = mine;
+            // Popups are for the player's own highway: others' would cover their name tags
+            _quietPopups = !mine;
+            _textNotifications.SetActive(!_quietPopups);
+            _tagPart = player.Profile.CurrentInstrument switch
+            {
+                Instrument.FiveFretGuitar => "Lead",
+                Instrument.FiveFretBass => "Bass",
+                Instrument.FiveFretRhythm => "Drums",
+                Instrument.Keys => "Vocals",
+                var other => other.ToString(),
+            };
+            _tagShownScore = -1;
+            UpdateTag(0, 0, true);
+        }
+
+        /// <summary>The tag's live numbers; only redrawn when they change.</summary>
+        public void UpdateTag(int score, int combo, bool fc)
+        {
+            if (_tag == null || (score == _tagShownScore && combo == _tagShownCombo && fc == _tagShownFc)) return;
+            _tagShownScore = score;
+            _tagShownCombo = combo;
+            _tagShownFc = fc;
+            _tagScore.text = score.ToString("N0");
+            _tagSub.text = _tagNote ?? (_tagPart + " · " + (fc && combo > 0 ? $"FC {combo}" : $"{combo} streak"));
+            _tagSub.color = _tagNote != null ? Menu.Moonlight.Danger : fc && combo > 0 ? TagGold : Menu.Moonlight.Muted;
+        }
+
+        /// <summary>A note in place of the streak ("Reconnecting…", "Left"), with the column dimmed; null clears it.</summary>
+        public void SetTagNote(string note)
+        {
+            if (_tag == null || note == _tagNote) return;
+            _tagNote = note;
+            _tagGroup.alpha = note != null ? 0.55f : 1f;
+            _tagShownScore = -1;
+            UpdateTag(_tagShownScore, _tagShownCombo, _tagShownFc);
+        }
+
+        private void BuildTag()
+        {
+            var panel = Menu.Moonlight.Panel("Name Tag", _topElementContainer, 15, new Color(0.024f, 0.04f, 0.11f, 0.82f));
+            _tag = panel.rectTransform;
+            _tag.anchorMin = _tag.anchorMax = new Vector2(0.5f, 0.5f);
+            _tag.pivot = new Vector2(0.5f, 0f);
+            _tag.sizeDelta = new Vector2(240f, 62f);
+            _tag.anchoredPosition = new Vector2(0f, 34f); // clear of the popups just above the highway
+            _tagGroup = panel.gameObject.AddComponent<CanvasGroup>();
+            _tagGroup.blocksRaycasts = false;
+            _tagEdge = Menu.Moonlight.Panel("Edge", _tag, 15, new Color(0.953f, 0.91f, 0.8f, 0.6f));
+            _tagEdge.sprite = Menu.Moonlight.OutlineSprite(15);
+            _tagEdge.rectTransform.anchorMin = Vector2.zero;
+            _tagEdge.rectTransform.anchorMax = Vector2.one;
+            _tagEdge.rectTransform.offsetMin = _tagEdge.rectTransform.offsetMax = Vector2.zero;
+
+            _tagName = Menu.Moonlight.Label("Name", _tag, Menu.Moonlight.Body, 20f, Menu.Moonlight.Text);
+            _tagName.fontWeight = FontWeight.Bold;
+            _tagName.richText = false;
+            PlaceTagText(_tagName.rectTransform, 9f, 26f, 0f, 92f);
+            _tagScore = Menu.Moonlight.Label("Score", _tag, Menu.Moonlight.Body, 20f, Menu.Moonlight.Text);
+            _tagScore.fontWeight = FontWeight.Bold;
+            _tagScore.alignment = TextAlignmentOptions.MidlineRight;
+            PlaceTagText(_tagScore.rectTransform, 9f, 26f, 100f, 0f);
+            _tagSub = Menu.Moonlight.Label("Part", _tag, Menu.Moonlight.Body, 16f, Menu.Moonlight.Muted);
+            PlaceTagText(_tagSub.rectTransform, 35f, 20f, 0f, 0f);
+        }
+
+        // A line of the tag: its top, height, and how far in from the left and right edges (14 px padding added)
+        private void PlaceTagText(RectTransform rect, float top, float height, float fromLeft, float fromRight)
+        {
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.offsetMin = new Vector2(14f + fromLeft, -top - height);
+            rect.offsetMax = new Vector2(-14f - fromRight, -top);
+        }
+
         public void ShowPlayerName(YargPlayer player)
         {
             _playerNameDisplay.ShowPlayer(player);
@@ -314,7 +436,7 @@ namespace YARG.Gameplay.HUD
 
         public void ForceReset()
         {
-            _textNotifications.SetActive(true);
+            _textNotifications.SetActive(!_quietPopups);
 
             _soloBox.ForceReset();
             _textNotifications.ForceReset();

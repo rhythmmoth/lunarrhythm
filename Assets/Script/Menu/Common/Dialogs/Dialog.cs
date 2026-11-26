@@ -50,6 +50,7 @@ namespace YARG.Menu.Dialogs
         public ColoredButton AddDialogButton(string localizeKey, UnityAction action)
         {
             var button = Instantiate(_dialogButtonPrefab, _dialogButtonContainer);
+            button.name = localizeKey; // DialogMoonlight picks the button's style from it
 
             // Add the navigatable button, and select it
             var nav = button.GetComponentInChildren<NavigatableUnityButton>();

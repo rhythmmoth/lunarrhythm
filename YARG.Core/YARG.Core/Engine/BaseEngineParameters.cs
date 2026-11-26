@@ -46,7 +46,7 @@ namespace YARG.Core.Engine
             SustainDropLeniency = stream.Read<double>(Endianness.Little);
 
             // Read star multiplier thresholds
-            int count = stream.Read<int>(Endianness.Little);
+            int count = stream.ReadCount(stream.Read<int>(Endianness.Little), sizeof(float));
             StarMultiplierThresholds = new float[count];
             for (int i = 0; i < StarMultiplierThresholds.Length; i++)
             {
@@ -58,7 +58,7 @@ namespace YARG.Core.Engine
             if (version >= 13)
             {
                 // Read solo star multiplier thresholds
-                int starMultCount = stream.Read<int>(Endianness.Little);
+                int starMultCount = stream.ReadCount(stream.Read<int>(Endianness.Little), sizeof(float));
                 SoloBonusStarMultiplierThresholds = new float[starMultCount];
                 for (int i = 0; i < SoloBonusStarMultiplierThresholds.Length; i++)
                 {

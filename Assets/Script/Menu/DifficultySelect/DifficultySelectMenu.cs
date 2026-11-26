@@ -103,32 +103,9 @@ namespace YARG.Menu.DifficultySelect
             string subHeaderKey = GlobalVariables.State.IsPractice ? "Practice" : "Quickplay";
             _subHeader.text = Localize.Key("Menu.Main.Options", subHeaderKey);
 
-            // Set navigation scheme
-            Navigator.Instance.PushScheme(new NavigationScheme(new()
-            {
-                NavigationScheme.Entry.NavigateUp,
-                NavigationScheme.Entry.NavigateDown,
-                NavigationScheme.Entry.NavigateSelect,
-                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", () =>
-                {
-                    if (_menuState == State.Main)
-                    {
-                        if (_playerIndex == 0)
-                        {
-                            MenuManager.Instance.PopMenu();
-                        }
-                        else
-                        {
-                            ChangePlayer(-1);
-                        }
-                    }
-                    else
-                    {
-                        _menuState = State.Main;
-                        UpdateForPlayer();
-                    }
-                })
-            }, false));
+            // The Moonlight board's player cards, drawn over this menu (which keeps the flow and the rules)
+            if (_moon == null) _moon = DifficultyMoonlight.Create(this);
+            _moon.PushScheme();
 
             _speedInput.text = $"{Mathf.RoundToInt(_songSpeed * 100f)}%";
             _songTitleText.text = GlobalVariables.State.CurrentSong.Name;
@@ -217,6 +194,7 @@ namespace YARG.Menu.DifficultySelect
             }
 
             _lastMenuState = _menuState;
+            _moon?.Show();
         }
 
         private void CreateMainMenu()
@@ -240,17 +218,7 @@ namespace YARG.Menu.DifficultySelect
             if (_possibleInstruments.Count > 0)
             {
                 // Ready button
-                CreateItem(LocalizeHeader("Ready"), _lastMenuState == State.Main, _difficultyGreenPrefab, () =>
-                {
-                    // If the player just selected vocal modifiers, don't show them again
-                    if (player.Profile.GameMode == GameMode.Vocals &&
-                        _vocalModifierSelectIndex == -1)
-                    {
-                        _vocalModifierSelectIndex = _playerIndex;
-                    }
-
-                    ChangePlayer(1);
-                });
+                CreateItem(LocalizeHeader("Ready"), _lastMenuState == State.Main, _difficultyGreenPrefab, ReadyPlayer);
 
                 CreateItem(LocalizeHeader("Instrument"),
                     player.Profile.CurrentInstrument.ToLocalizedName(),
@@ -318,18 +286,7 @@ namespace YARG.Menu.DifficultySelect
             if (_possibleInstruments.Count <= 0 || PlayerContainer.Players.Count != 1)
             {
                 // Sit out button
-                CreateItem(LocalizeHeader("SitOut"), _possibleInstruments.Count <= 0, _difficultyItemSmallRedPrefab, () =>
-                {
-                    // If the user went back to sit out, and the vocal modifiers were selected,
-                    // deselect them.
-                    if (_vocalModifierSelectIndex == _playerIndex)
-                    {
-                        _vocalModifierSelectIndex = -1;
-                    }
-
-                    player.SittingOut = true;
-                    ChangePlayer(1);
-                });
+                CreateItem(LocalizeHeader("SitOut"), _possibleInstruments.Count <= 0, _difficultyItemSmallRedPrefab, SitOutPlayer);
 
                 // Disconnect button
                 CreateItem(LocalizeHeader("Disconnect"), _possibleInstruments.Count <= 0, _difficultyItemSmallRedPrefab, () =>
@@ -347,6 +304,58 @@ namespace YARG.Menu.DifficultySelect
                     ChangePlayer(0);
                 });
             }
+        }
+
+        private void ReadyPlayer()
+        {
+            // If the player just selected vocal modifiers, don't show them again
+            if (CurrentPlayer.Profile.GameMode == GameMode.Vocals && _vocalModifierSelectIndex == -1)
+            {
+                _vocalModifierSelectIndex = _playerIndex;
+            }
+
+            ChangePlayer(1);
+        }
+
+        private void SitOutPlayer()
+        {
+            // If the user went back to sit out, and the vocal modifiers were selected, deselect them.
+            if (_vocalModifierSelectIndex == _playerIndex)
+            {
+                _vocalModifierSelectIndex = -1;
+            }
+
+            CurrentPlayer.SittingOut = true;
+            ChangePlayer(1);
+        }
+
+        private void SetInstrument(Instrument instrument)
+        {
+            var preferredInstrument = CurrentPlayer.Profile.PreferredInstrument;
+            CurrentPlayer.Profile.CurrentInstrument = instrument;
+
+            // What we are doing here is resetting preferred instrument only if the current preferred instrument
+            // was an option for this chart. This ensures that preferred instrument does not change when the
+            // player is forced to use a different instrument.
+            if (instrument != preferredInstrument && _possibleInstruments.Contains(preferredInstrument))
+            {
+                CurrentPlayer.Profile.PreferredInstrument = instrument;
+            }
+
+            FiltersMenu.ResetIntensityFiltersForProfile(CurrentPlayer.Profile);
+            UpdatePossibleDifficulties();
+            UpdatePossibleModifiers();
+
+            _menuState = State.Main;
+            UpdateForPlayer();
+        }
+
+        private void SetDifficulty(Difficulty difficulty)
+        {
+            CurrentPlayer.Profile.CurrentDifficulty = CurrentPlayer.Profile.DifficultyFallback = difficulty;
+
+            _menuState = State.Main;
+            UpdateForPlayer();
         }
 
         private void ShowWarning(string message)
@@ -368,26 +377,7 @@ namespace YARG.Menu.DifficultySelect
             foreach (var instrument in _possibleInstruments)
             {
                 bool selected = CurrentPlayer.Profile.CurrentInstrument == instrument;
-                CreateItem(instrument.ToLocalizedName(), selected, () =>
-                {
-                    var preferredInstrument = CurrentPlayer.Profile.PreferredInstrument;
-                    CurrentPlayer.Profile.CurrentInstrument = instrument;
-
-                    // What we are doing here is resetting preferred instrument only if the current preferred instrument
-                    // was an option for this chart. This ensures that preferred instrument does not change when the
-                    // player is forced to use a different instrument.
-                    if (instrument != preferredInstrument && _possibleInstruments.Contains(preferredInstrument))
-                    {
-                        CurrentPlayer.Profile.PreferredInstrument = instrument;
-                    }
-
-                    FiltersMenu.ResetIntensityFiltersForProfile(CurrentPlayer.Profile);
-                    UpdatePossibleDifficulties();
-                    UpdatePossibleModifiers();
-
-                    _menuState = State.Main;
-                    UpdateForPlayer();
-                });
+                CreateItem(instrument.ToLocalizedName(), selected, () => SetInstrument(instrument));
             }
         }
 
@@ -396,15 +386,7 @@ namespace YARG.Menu.DifficultySelect
             foreach (var difficulty in _possibleDifficulties)
             {
                 bool selected = CurrentPlayer.Profile.CurrentDifficulty == difficulty;
-                CreateItem(difficulty.ToLocalizedName(), selected, () =>
-                {
-                    CurrentPlayer.Profile.CurrentDifficulty
-                        = CurrentPlayer.Profile.DifficultyFallback
-                        = difficulty;
-
-                    _menuState = State.Main;
-                    UpdateForPlayer();
-                });
+                CreateItem(difficulty.ToLocalizedName(), selected, () => SetDifficulty(difficulty));
             }
         }
 
@@ -477,6 +459,13 @@ namespace YARG.Menu.DifficultySelect
         private void UpdatePossibleModifiers()
         {
             var profile = CurrentPlayer.Profile;
+
+            // A pad game: YARG's modifiers aren't offered (the only one is Upscroll, a display preference), and any
+            // left on from before are cleared, since they keep runs off the leaderboards
+            _possibleModifiers.Clear();
+            _excusableModifiers = Modifier.None;
+            profile.RemoveModifiers(profile.CurrentModifiers);
+            if (_possibleModifiers.Count == 0) return;
 
             // Get the possible modifiers (split the enum into multiple) and
             // make sure current modifiers are valid, and remove the invalid ones
@@ -679,6 +668,49 @@ namespace YARG.Menu.DifficultySelect
         private void OnDisable()
         {
             Navigator.Instance.PopScheme();
+            _moon?.SchemePopped();
+        }
+
+        // ---------- for the Moonlight view ----------
+
+        private DifficultyMoonlight _moon;
+
+        internal YargPlayer Player => CurrentPlayer;
+        internal int PlayerIndex => _playerIndex;
+        internal IReadOnlyList<Instrument> PossibleInstruments => _possibleInstruments;
+        internal IReadOnlyList<Difficulty> PossibleDifficulties => _possibleDifficulties;
+        internal IReadOnlyList<Modifier> PossibleModifiers => _possibleModifiers;
+        internal Modifier ExcusableModifiers => _excusableModifiers;
+        /// <summary>As in YARG: sitting out is for a group (or a song this player can't play).</summary>
+        internal bool CanSitOut => _possibleInstruments.Count <= 0 || PlayerContainer.Players.Count != 1;
+        /// <summary>Vocal modifiers are picked once, by the first vocalist.</summary>
+        internal bool CanPickModifiers => CurrentPlayer.Profile.GameMode != GameMode.Vocals ||
+            _vocalModifierSelectIndex == -1 || _vocalModifierSelectIndex == _playerIndex;
+
+        internal int SpeedPercent
+        {
+            get => float.TryParse(_speedInput.text.TrimEnd('%'), out var speed) ? Mathf.RoundToInt(speed) : 100;
+            set => _speedInput.SetTextWithoutNotify($"{Math.Clamp(value, 10, 5000)}%");
+        }
+
+        internal void PickInstrument(Instrument instrument) => SetInstrument(instrument);
+        internal void PickDifficulty(Difficulty difficulty) => SetDifficulty(difficulty);
+
+        internal void ToggleModifier(Modifier modifier)
+        {
+            var profile = CurrentPlayer.Profile;
+            if (profile.IsModifierActive(modifier)) profile.RemoveModifiers(modifier);
+            else profile.AddSingleModifier(modifier);
+            UpdateForPlayer();
+        }
+
+        internal void Ready() => ReadyPlayer();
+        internal void SitOut() => SitOutPlayer();
+
+        internal void Back()
+        {
+            if (_playerIndex == 0) MenuManager.Instance.PopMenu();
+            else ChangePlayer(-1);
         }
 
         private void CreateItem(string header, string body, bool selected, DifficultyItem difficultyItem, UnityAction a)

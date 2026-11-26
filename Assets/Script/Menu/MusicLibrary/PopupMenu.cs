@@ -46,14 +46,22 @@ namespace YARG.Menu.MusicLibrary
 
         private State _menuState;
 
+        private bool _styled;
+
         private void OnEnable()
         {
+            if (!_styled)
+            {
+                LibraryMoonlight.StylePopup(transform);
+                _styled = true;
+            }
             Navigator.Instance.PushScheme(new NavigationScheme(new()
             {
                 NavigationScheme.Entry.NavigateUp,
                 NavigationScheme.Entry.NavigateDown,
-                NavigationScheme.Entry.NavigateSelect,
-                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", () =>
+                new NavigationScheme.Entry(MenuAction.Green, "Menu.MusicLibrary.Footer.Choose",
+                    () => NavigationGroup.CurrentNavigationGroup.ConfirmSelection()),
+                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Close", () =>
                 {
                     if (_menuState == State.Main)
                     {
@@ -101,32 +109,14 @@ namespace YARG.Menu.MusicLibrary
             }
 
             _navGroup.SelectFirst();
+            LibraryMoonlight.LayoutPopup(transform, _container,
+                _menuState == State.Main ? _musicLibrary.CurrentSelection as SongViewType : null,
+                _musicLibrary.CurrentCover, _header.activeSelf ? _headerText.text : null);
         }
 
         private void CreateMainMenu()
         {
             SetHeader(null);
-
-            if (_musicLibrary.MenuState != MenuState.PlaylistSelect)
-            {
-                CreateItem("RandomSong", () =>
-                {
-                    _musicLibrary.SelectRandomSong();
-                    gameObject.SetActive(false);
-                });
-            }
-
-            CreateItem("BackToTop", () =>
-            {
-                _musicLibrary.SelectedIndex = 0;
-                gameObject.SetActive(false);
-            });
-
-            CreateItem("ScanSongs", () =>
-            {
-                _musicLibrary.RefreshSongs();
-                gameObject.SetActive(false);
-            });
 
             var viewType = _musicLibrary.CurrentSelection;
 
@@ -134,6 +124,16 @@ namespace YARG.Menu.MusicLibrary
             var favoriteInfo = viewType.GetFavoriteInfo();
             if (favoriteInfo.ShowFavoriteButton)
             {
+                // The board's order: setlist first, then favourites
+                if (viewType is SongViewType)
+                {
+                    CreateItemUnlocalized(_musicLibrary.GetGreenHoldActionLabel(), () =>
+                    {
+                        _musicLibrary.ExecuteGreenHoldAction();
+                        gameObject.SetActive(false);
+                    }, "or hold Play");
+                }
+
                 if (!favoriteInfo.IsFavorited)
                 {
                     CreateItem("AddToFavorites", () =>
@@ -157,11 +157,6 @@ namespace YARG.Menu.MusicLibrary
 
                 if (viewType is SongViewType)
                 {
-                    CreateItemUnlocalized(_musicLibrary.GetGreenHoldActionLabel(), () =>
-                    {
-                        _musicLibrary.ExecuteGreenHoldAction();
-                        gameObject.SetActive(false);
-                    });
 
                     bool isInPlaylist = _musicLibrary.MenuState == MenuState.Playlist &&
                         _musicLibrary.SelectedPlaylist != null &&
@@ -191,6 +186,27 @@ namespace YARG.Menu.MusicLibrary
                         AddRemoveFromPlaylistItem();
                 }
             }
+
+            if (_musicLibrary.MenuState != MenuState.PlaylistSelect)
+            {
+                CreateItem("RandomSong", () =>
+                {
+                    _musicLibrary.SelectRandomSong();
+                    gameObject.SetActive(false);
+                });
+            }
+
+            CreateItem("BackToTop", () =>
+            {
+                _musicLibrary.SelectedIndex = 0;
+                gameObject.SetActive(false);
+            });
+
+            CreateItem("ScanSongs", () =>
+            {
+                _musicLibrary.RefreshSongs();
+                gameObject.SetActive(false);
+            }, "gets new songs");
 
             if (viewType is PlaylistViewType playlistView &&
                 playlistView.Playlist != PlaylistContainer.FavoritesPlaylist)
@@ -459,10 +475,10 @@ namespace YARG.Menu.MusicLibrary
             }
         }
 
-        private void CreateItem(string localizeKey, UnityAction a)
+        private void CreateItem(string localizeKey, UnityAction a, string hint = null)
         {
             var localized = Localize.Key("Menu.MusicLibrary.Popup.Item", localizeKey);
-            CreateItemUnlocalized(localized, a);
+            CreateItemUnlocalized(localized, a, hint);
         }
 
         private void CreateItem(string localizeKey, string formatArg, UnityAction a)
@@ -479,10 +495,11 @@ namespace YARG.Menu.MusicLibrary
             _musicLibrary.SetNavigationScheme(true);
         }
 
-        private void CreateItemUnlocalized(string body, UnityAction a)
+        private void CreateItemUnlocalized(string body, UnityAction a, string hint = null)
         {
             var btn = Instantiate(_menuItemPrefab, _container);
             btn.Initialize(body, a);
+            LibraryMoonlight.StylePopupItem(btn, hint);
             _navGroup.AddNavigatable(btn.Button);
         }
     }

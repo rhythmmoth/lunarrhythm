@@ -51,6 +51,12 @@ namespace YARG.Gameplay.HUD
             // Convert to dictionary with "Menu" as key
             var children = GetComponentsInChildren<PauseMenuObject>(true);
             _menus = children.ToDictionary(i => i.Menu, i => i);
+
+            // The Moonlight board's pause, inside the quick play pause so it opens and closes with it
+            if (_menus.TryGetValue(Menu.QuickPlayPause, out var quickPlay) && quickPlay.TryGetComponent(out GenericPause pause))
+            {
+                PauseMoonlight.Create(pause);
+            }
         }
 
         private void Start()

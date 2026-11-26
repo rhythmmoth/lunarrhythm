@@ -155,6 +155,10 @@ namespace YARG.Menu.ScoreScreen
             // Put the scores in!
             CreateScoreCards(scoreScreenStats);
 
+            // The Moonlight board's score screen, drawn over this one (which still saves and moves on)
+            if (_moon == null) _moon = ScoreMoonlight.Create(this);
+            _moon.Show(scoreScreenStats);
+
             SetNavigationScheme();
 
             // No source icons in the pad game; hide the icon's background square with it
@@ -435,6 +439,13 @@ namespace YARG.Menu.ScoreScreen
 
             _continueButtonEntry = new NavigationScheme.Entry(MenuAction.Green, "Menu.Common.Continue", () =>
                 {
+                    if (Online.LobbyPlay.Playing)
+                    {
+                        // Back to the lobby, which picks up the next song (or shows the summary)
+                        Online.LobbyPlay.Returned();
+                        GlobalVariables.Instance.LoadScene(SceneIndex.Menu);
+                        return;
+                    }
                     if (!_analyzingReplay)
                     {
                         GlobalVariables.State.ShowIndex++;
@@ -567,8 +578,48 @@ namespace YARG.Menu.ScoreScreen
             _showAdvancedButtonEntry = new NavigationScheme.Entry(MenuAction.Orange, key, ToggleAdvancedStats);
         }
 
+        private ScoreMoonlight _moon;
+
+        private void Update()
+        {
+            // In a lobby, once everyone has finished the song everyone goes to the between-songs screen together
+            // (results and the next part); an older server goes straight to syncing, so leave before its time runs out
+            if (Online.LobbyPlay.Playing && (Lobby.State is { Phase: "between" }
+                || Lobby.State is { Phase: "sync", Deadline: { } deadline } && deadline - Lobby.ServerNowMs < 45_000))
+            {
+                _continueButtonEntry.Invoke();
+            }
+            else if (Online.LobbyPlay.Playing && Lobby.State == null)
+            {
+                _continueButtonEntry.Invoke(); // the lobby is gone
+            }
+        }
+
         private void UpdateNavigationScheme(bool reset = false)
         {
+            if (_moon != null)
+            {
+                // The board's footer: A Continue, X Play again, Y Song leaderboard (and ending a setlist early)
+                if (reset) Navigator.Instance.PopScheme();
+                var moonButtons = new List<NavigationScheme.Entry>
+                {
+                    _continueButtonEntry,
+                    new(MenuAction.Blue, "Menu.ScoreScreen.PlayAgain", () => _restartButtonEntry.Invoke()),
+                    new(MenuAction.Yellow, "Menu.ScoreScreen.SongLeaderboard", _moon.NextBoard),
+                };
+                if (Online.LobbyPlay.Playing)
+                {
+                    moonButtons.RemoveAt(1); // the lobby plays each song once
+                }
+                if (GlobalVariables.State.PlayingAShow &&
+                    GlobalVariables.State.ShowIndex + 1 < GlobalVariables.State.ShowSongs.Count)
+                {
+                    moonButtons.Add(_endEarlyButtonEntry);
+                }
+                Navigator.Instance.PushScheme(new(moonButtons, false));
+                return;
+            }
+
             if (reset)
             {
                 Navigator.Instance.PopScheme();
@@ -577,8 +628,11 @@ namespace YARG.Menu.ScoreScreen
             List<NavigationScheme.Entry> buttons = new()
             {
                 _continueButtonEntry,
-                _restartButtonEntry
             };
+            if (!Online.LobbyPlay.Playing)
+            {
+                buttons.Add(_restartButtonEntry);
+            }
 
             var song = GlobalVariables.State.CurrentSong;
             var isFavorited = PlaylistContainer.FavoritesPlaylist.ContainsSong(song);

@@ -3,6 +3,7 @@ using YARG.Core.Chart;
 using YARG.Core.Engine;
 using YARG.Core.Engine.Keys;
 using YARG.Core.Engine.Keys.Engines;
+using YARG.Core.Game;
 using YARG.Core.Input;
 using YARG.Core.Song;
 
@@ -413,6 +414,51 @@ public class KeysEngineTester : EngineTester
             Assert.That(judged, Is.EqualTo(new[] { true, false, true }));
             Assert.That(engine.EngineStats.PerfectHits, Is.EqualTo(2));
             Assert.That(engine.EngineStats.GoodHits, Is.EqualTo(1));
+        }
+    }
+
+    [TestCase(0.105, 1)]
+    [TestCase(0.115, 0)]
+    [TestCase(-0.105, 1)]
+    [TestCase(-0.115, 0)]
+    public void DefaultPadWindow_Is110MsEitherSide(double offset, int hits)
+    {
+        var first = CreateNote(FiveFretGuitarFret.Red, NoteFlags.None, 0.5, 480);
+        var note = CreateNote(FiveFretGuitarFret.Green, NoteFlags.None, 1.0, 960);
+        LinkNotes(first, note);
+        var engine = new YargFiveLaneKeysEngine(
+            new InstrumentDifficulty<GuitarNote>(Instrument.FiveFretGuitar, Difficulty.Expert, [first, note], new(), new()),
+            CreateSyncTrack(), EnginePreset.Default.ProKeys.Create(StarMultiplierThresholds, SoloBonusStarMultiplierThresholds, false), false);
+
+        PressKey(engine, 0.5, ProKeysAction.RedKey);
+        PressKey(engine, 1.0 + offset, ProKeysAction.GreenKey);
+        engine.Update(2.0);
+
+        Assert.That(engine.EngineStats.NotesHit, Is.EqualTo(1 + hits));
+    }
+
+    [Test]
+    public void Overhit_CountsAsAMissForThePlayer()
+    {
+        var first = CreateNote(FiveFretGuitarFret.Green, NoteFlags.None, 0.5, 480);
+        var second = CreateNote(FiveFretGuitarFret.Red, NoteFlags.None, 1.5, 1440);
+        LinkNotes(first, second);
+        var engine = new YargFiveLaneKeysEngine(
+            new InstrumentDifficulty<GuitarNote>(Instrument.FiveFretGuitar, Difficulty.Expert, [first, second], new(), new()),
+            CreateSyncTrack(), CreateFestivalParams(4), false);
+
+        PressKey(engine, 0.5, ProKeysAction.GreenKey);
+        PressKey(engine, 1.0, ProKeysAction.BlueKey); // no note anywhere near: breaks the streak
+        PressKey(engine, 1.5, ProKeysAction.RedKey);
+        engine.Update(2.5);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(engine.EngineStats.NotesHit, Is.EqualTo(2));
+            Assert.That(engine.EngineStats.NotesMissed, Is.Zero);
+            Assert.That(engine.EngineStats.Overhits, Is.EqualTo(1));
+            Assert.That(engine.EngineStats.Misses, Is.EqualTo(1));
+            Assert.That(engine.EngineStats.IsFullCombo, Is.False);
         }
     }
 

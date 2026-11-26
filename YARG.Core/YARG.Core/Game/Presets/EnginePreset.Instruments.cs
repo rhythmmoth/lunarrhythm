@@ -342,11 +342,12 @@ namespace YARG.Core.Game
             public double SustainDropLeniency = DEFAULT_SUSTAIN_DROP_LENIENCY;
 
             [SettingType(SettingType.Special)]
-            // Festival's window: 125 ms either side of the note
+            // 110 ms either side of the note: a little tighter than Festival's 125, so a late or early press reads
+            // as the miss it is (the leaderboard server checks runs against this, so both change together)
             public HitWindowPreset HitWindow = new()
             {
-                MaxWindow = 0.25,
-                MinWindow = 0.25,
+                MaxWindow = 0.22,
+                MinWindow = 0.22,
                 IsDynamic = false,
                 FrontToBackRatio = 1.0,
                 LaneAutohitWindow = 0.160

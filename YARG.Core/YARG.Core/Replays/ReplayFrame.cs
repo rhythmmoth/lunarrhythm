@@ -64,7 +64,7 @@ namespace YARG.Core.Replays
                     throw new InvalidOperationException("Stat creation not implemented.");
             }
 
-            int count = stream.Read<int>(Endianness.Little);
+            int count = stream.ReadCount(stream.Read<int>(Endianness.Little), sizeof(double) + 2 * sizeof(int));
             Inputs = new GameInput[count];
             for (int i = 0; i < count; i++)
             {

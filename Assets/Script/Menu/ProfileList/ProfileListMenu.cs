@@ -43,14 +43,30 @@ namespace YARG.Menu.ProfileList
 
         public bool CanConnectProfile => PlayerContainer.Players.Count < _maxConnected;
 
+        private PlayersMoonlight _moon;
+
+        private void Awake()
+        {
+            // The Moonlight board's Players and Edit player screens, drawn over this menu's (hidden) list
+            _moon = PlayersMoonlight.Create(this, _profileList);
+
+            // Bots aren't part of LunarRhythm, so the Add Bot button goes (found by what it calls)
+            foreach (var button in GetComponentsInChildren<ColoredButton>(true))
+            {
+                for (int i = 0; i < button.OnClick.GetPersistentEventCount(); i++)
+                {
+                    if (button.OnClick.GetPersistentMethodName(i) == nameof(AddBotProfile))
+                    {
+                        button.gameObject.SetActive(false);
+                    }
+                }
+            }
+        }
+
         private void OnEnable()
         {
             RefreshList();
-
-            Navigator.Instance.PushScheme(new NavigationScheme(new()
-            {
-                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", () => MenuManager.Instance.PopMenu(), hide: true),
-            }, true));
+            _moon.OnShown();
 
             PlayerContainer.PlayerAdded += OnPlayerAdded;
         }
@@ -63,7 +79,7 @@ namespace YARG.Menu.ProfileList
             // Update player icons if a profile has changed its GameMode.
             StatsManager.Instance.UpdateActivePlayers();
 
-            Navigator.Instance.PopScheme();
+            _moon.PopScheme();
 
             PlayerContainer.PlayerAdded -= OnPlayerAdded;
         }
@@ -84,6 +100,7 @@ namespace YARG.Menu.ProfileList
             AddListGroup(Localize.Key("Menu.ProfileList.Players"), otherProfiles.Where(e => !e.IsBot));
             AddListGroup(Localize.Key("Menu.ProfileList.Bots"), otherProfiles.Where(e => e.IsBot));
 
+            _moon?.Rebuild(selectedProfile);
             if (selectedProfile == null)
             {
                 return;

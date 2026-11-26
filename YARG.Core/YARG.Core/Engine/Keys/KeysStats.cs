@@ -12,6 +12,8 @@ namespace YARG.Core.Engine.Keys
         /// </summary>
         public int Overhits;
 
+        public override int Misses => NotesMissed + Overhits;
+
         /// <summary>
         /// Amount of overhits which were ignored due to fat-fingering.
         /// </summary>

@@ -48,6 +48,71 @@ namespace YARG.Gameplay.HUD
 
         private int HitPercent => Mathf.FloorToInt((float) _solo.NotesHit / _solo.NoteCount * 100f);
 
+        // ---------- the Moonlight pill (board NextSoloCountdown), drawn inside the old box so its fades still apply ----------
+
+        private static readonly Color Gold = new(0.949f, 0.788f, 0.298f);
+        private Image _chip, _fill;
+        private TextMeshProUGUI _chipText, _big, _small;
+
+        private void BuildPill()
+        {
+            if (_chip != null) return;
+            // The old look goes; the box keeps its place, its canvas group and its show/hide
+            _soloBox.enabled = false;
+            _soloTopText.enabled = _soloBottomText.enabled = _soloFullText.enabled = false;
+
+            var pill = Menu.Moonlight.Panel("Moonlight Solo", _soloBox.transform, 27, new Color(0.024f, 0.04f, 0.11f, 0.88f)).rectTransform;
+            pill.anchorMin = pill.anchorMax = pill.pivot = new Vector2(0.5f, 0.5f);
+            pill.anchoredPosition = Vector2.zero;
+            pill.sizeDelta = new Vector2(300f, 64f);
+            _chip = Menu.Moonlight.Panel("Chip", pill, 17, Menu.Moonlight.Moon);
+            var chip = _chip.rectTransform;
+            chip.anchorMin = chip.anchorMax = chip.pivot = new Vector2(0f, 0.5f);
+            chip.anchoredPosition = new Vector2(12f, 0f);
+            chip.sizeDelta = new Vector2(112f, 36f);
+            _chipText = Menu.Moonlight.Label("Chip Text", chip, Menu.Moonlight.Heading, 15f, new Color(0.043f, 0.063f, 0.149f));
+            _chipText.alignment = TextAlignmentOptions.Center;
+            _chipText.characterSpacing = 8f;
+            Stretch(_chipText.rectTransform);
+            _big = Menu.Moonlight.Label("Percent", pill, Menu.Moonlight.Heading, 24f, Menu.Moonlight.Text);
+            Place(_big.rectTransform, new Vector2(138f, -8f), new Vector2(90f, 32f));
+            _small = Menu.Moonlight.Label("Notes", pill, Menu.Moonlight.Body, 16f, Menu.Moonlight.Muted);
+            _small.alignment = TextAlignmentOptions.MidlineRight;
+            Place(_small.rectTransform, new Vector2(214f, -10f), new Vector2(72f, 28f));
+            var track = Menu.Moonlight.Panel("Bar", pill, 2, Menu.Moonlight.Keycap);
+            Place(track.rectTransform, new Vector2(138f, -46f), new Vector2(148f, 4f));
+            _fill = Menu.Moonlight.Panel("Fill", track.rectTransform, 2, Menu.Moonlight.Moon);
+            _fill.rectTransform.anchorMin = Vector2.zero;
+            _fill.rectTransform.anchorMax = new Vector2(0f, 1f);
+            _fill.rectTransform.pivot = new Vector2(0f, 0.5f);
+            _fill.rectTransform.offsetMin = _fill.rectTransform.offsetMax = Vector2.zero;
+        }
+
+        private void SetPill(string chip, Color chipColor, string big, string small, float fill)
+        {
+            BuildPill();
+            _chipText.text = chip;
+            _chip.color = chipColor;
+            _fill.color = chipColor;
+            _big.text = big;
+            _small.text = small;
+            _fill.rectTransform.anchorMax = new Vector2(Mathf.Clamp01(fill), 1f);
+        }
+
+        private static void Stretch(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
+        private static void Place(RectTransform rect, Vector2 topLeft, Vector2 size)
+        {
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = topLeft;
+            rect.sizeDelta = size;
+        }
+
         private Coroutine _currentCoroutine;
 
         public void StartSolo(SoloSection solo)
@@ -75,6 +140,7 @@ namespace YARG.Gameplay.HUD
             // Set some dummy text
             _soloTopText.text = "0%";
             _soloBottomText.SetTextFormat("0/{0}", _solo.NoteCount);
+            SetPill("SOLO", Menu.Moonlight.Moon, "0%", $"0 / {_solo.NoteCount}", 0f);
 
             // Fade in the box
             yield return _soloBoxCanvasGroup
@@ -98,6 +164,8 @@ namespace YARG.Gameplay.HUD
                 _displayedNotesHit = _solo.NotesHit;
                 _displayedNoteCount = _solo.NoteCount;
                 _soloBottomText.SetTextFormat("{0}/{1}", _displayedNotesHit, _displayedNoteCount);
+                SetPill("SOLO", Menu.Moonlight.Moon, $"{hitPercent}%", $"{_displayedNotesHit} / {_displayedNoteCount}",
+                    (float) _displayedNotesHit / Mathf.Max(1, _displayedNoteCount));
             }
         }
 
@@ -138,6 +206,9 @@ namespace YARG.Gameplay.HUD
 
             // Display final hit percentage
             _soloFullText.SetTextFormat("{0}%", HitPercent);
+            bool perfect = HitPercent >= 100;
+            SetPill(perfect ? "PERFECT" : "SOLO", perfect ? Gold : Menu.Moonlight.Moon, $"{HitPercent}%",
+                $"{_solo.NotesHit} / {_solo.NoteCount}", 1f);
 
             yield return new WaitForSeconds(1f);
 
@@ -157,6 +228,7 @@ namespace YARG.Gameplay.HUD
             };
 
             _soloFullText.text = Localize.Key("Gameplay.Solo.Performance", performanceKey);
+            if (!perfect) _small.text = _soloFullText.text; // "Great", "Messy"...
 
             yield return new WaitForSeconds(1f);
 

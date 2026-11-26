@@ -27,6 +27,21 @@ namespace YARG.Menu.Persistent
 
         protected override void SingletonAwake()
         {
+            // Moonlight: a translucent night strip over the moving background instead of solid black
+            var strip = transform.Find("Background")?.GetComponent<UnityEngine.UI.Image>();
+            if (strip != null)
+            {
+                strip.sprite = null; // the old sprite is black, so a tint can't lighten it
+                strip.color = new Color(0.012f, 0.02f, 0.063f, 0.88f);
+            }
+
+            if (_buttonContainer.TryGetComponent(out UnityEngine.UI.HorizontalLayoutGroup row))
+            {
+                row.spacing = 42f;
+            }
+            var container = (RectTransform) _buttonContainer;
+            container.anchoredPosition = new Vector2(48f, container.anchoredPosition.y);
+
             // Cache help bar buttons
             foreach (var _ in EnumExtensions<MenuAction>.Values)
             {
@@ -97,16 +112,16 @@ namespace YARG.Menu.Persistent
                     continue;
                 }
 
-                // Coalesce left/right into one button
+                // Coalesce left/right into one button (unless the scheme hides them, like any other entry)
                 if (entry.Action == MenuAction.Left)
                 {
-                    hasLeft = true;
+                    hasLeft |= !entry.Hide;
                     continue;
                 }
 
                 if (entry.Action == MenuAction.Right)
                 {
-                    hasRight = true;
+                    hasRight |= !entry.Hide;
                     continue;
                 }
 
@@ -129,7 +144,7 @@ namespace YARG.Menu.Persistent
             {
                 foreach (var entry in scheme.Entries)
                 {
-                    if (entry.Action == MenuAction.Left || entry.Action == MenuAction.Right)
+                    if ((entry.Action == MenuAction.Left || entry.Action == MenuAction.Right) && !entry.Hide)
                     {
                         var button = _buttons[buttonIndex];
                         button.gameObject.SetActive(true);

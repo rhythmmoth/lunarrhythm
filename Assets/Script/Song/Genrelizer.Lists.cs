@@ -42,6 +42,7 @@ namespace YARG.Song
         private const string HEAVY_METAL = "heavy metal";
         private const string HIP_HOP_RAP = "hip-hop/rap";
         private const string HOLIDAY = "holiday";
+        private const string CHRISTMAS = "christmas"; // ours, not official: an alias of holiday
         private const string HOUSE = "house";
         private const string IDM = "idm";
         private const string INDIE_ROCK = "indie rock";

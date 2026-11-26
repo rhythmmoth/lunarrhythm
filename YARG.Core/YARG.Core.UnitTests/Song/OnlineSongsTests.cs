@@ -69,6 +69,37 @@ public class OnlineSongsTests
         }
     }
 
+    [Test]
+    public void Sync_ReadsSeasonAndFeaturedAndNeitherIsASong()
+    {
+        string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        try
+        {
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, OnlineSongs.DATABASE_FILE), """
+                { "_season": { "number": 1, "name": "Moonrise", "start": "2026-12-01", "end": "2027-03-01", "songs": ["glow"] },
+                  "_featured": { "note": "Picked this week", "songs": ["arcade", "arcade", 5] } }
+                """);
+            OnlineSongs.Sync(root, allowNetwork: false, null);
+            Assert.That(Directory.GetDirectories(root), Is.Empty);
+
+            var season = OnlineSongs.Season!;
+            Assert.That((season.Number, season.Name, season.Songs), Is.EqualTo((1, "Moonrise", new[] { "glow" })));
+            Assert.That(season.Start, Is.EqualTo(new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc)));
+            Assert.That(season.IsRunning(new DateTime(2026, 11, 30, 23, 59, 0, DateTimeKind.Utc)), Is.False);
+            Assert.That(season.IsRunning(new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc)), Is.True);
+            Assert.That(season.IsRunning(new DateTime(2027, 3, 1, 0, 0, 0, DateTimeKind.Utc)), Is.False, "ends at the start of the end date");
+            Assert.That((OnlineSongs.Featured!.Note, OnlineSongs.Featured.Songs), Is.EqualTo(("Picked this week", new[] { "arcade" })));
+
+            // A season with bad dates is ignored rather than guessed at
+            Assert.That(OnlineSongs.ReadSeason(JObject.Parse("""{ "number": 1, "start": "soon", "end": "" }""")), Is.Null);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [TestCase("https://cdn.example.com/songs/a/lead.ogg", true)]
     [TestCase("https://example.com/x", true)]
     [TestCase("http://cdn.example.com/x", false)]

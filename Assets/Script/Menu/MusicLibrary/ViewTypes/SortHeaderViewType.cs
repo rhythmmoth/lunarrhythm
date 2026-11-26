@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Cysharp.Text;
 using UnityEngine;
@@ -26,6 +26,10 @@ namespace YARG.Menu.MusicLibrary
         private readonly int    _songCount;
         public           int    TotalStarsCount { get; set; }
         public readonly  bool   Collapsed;
+        /// <summary>The Moonlight board's coloured heads (season pink, featured blue); null for the plain ones.</summary>
+        public Color? Tint { get; set; }
+        /// <summary>The small line at the head's right, like "Ends in 23 days".</summary>
+        public string Note { get; set; }
         private readonly Action _onClicked;
 
         private static readonly HashSet<string> SourceCounter  = new();
@@ -106,6 +110,8 @@ namespace YARG.Menu.MusicLibrary
         public override Sprite? GetIcon()
 #nullable disable
         {
+            // No collapse arrow on a head that can't collapse (the Moonlight list's heads are labels)
+            if (_onClicked == null) return null;
             string assetKey = Collapsed ? "MusicLibraryIcons[Right]" : "MusicLibraryIcons[Down]";
             if (!IconCache.TryGetValue(assetKey, out var icon))
             {

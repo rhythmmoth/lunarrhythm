@@ -33,6 +33,9 @@ namespace YARG.Core.Song
         private const string VERSION_KEY = "serverChangeList";
         // Not a song: the title screen news line, edited in the songdb tool
         public const string NEWS_KEY = "_news";
+        // Not songs either: the season and the admin-picked featured songs, edited in the panel
+        public const string SEASON_KEY = "_season";
+        public const string FEATURED_KEY = "_featured";
 
         private static readonly Regex SHORTNAME = new("^[a-z0-9][a-z0-9_-]*$");
         private static readonly string[] IMAGE_FORMATS = { ".png", ".jpg", ".jpeg" };
@@ -51,6 +54,83 @@ namespace YARG.Core.Song
 
         /// <summary>News text from the last database read (online or cached); empty if none.</summary>
         public static volatile string News = string.Empty;
+
+        // How far the server's clock is ahead of this PC's, from the last database download
+        private static long _clockOffsetTicks;
+
+        /// <summary>Now by the server's clock (so changing the PC's date can't start or stretch a season). Until the
+        /// first download, and offline, it's this PC's clock.</summary>
+        public static DateTime ServerNow => DateTime.UtcNow + TimeSpan.FromTicks(Interlocked.Read(ref _clockOffsetTicks));
+
+        /// <summary>The season from the last database read, running or not; null if there's none.</summary>
+        public static volatile SeasonInfo? Season;
+
+        /// <summary>The featured songs from the last database read; null if there are none.</summary>
+        public static volatile FeaturedInfo? Featured;
+
+        public sealed class SeasonInfo
+        {
+            public int Number { get; set; }
+            public string Name { get; set; } = string.Empty;
+            /// <summary>UTC; the season runs from the start of Start to the start of End.</summary>
+            public DateTime Start { get; set; }
+            public DateTime End { get; set; }
+            public IReadOnlyCollection<string> Songs { get; set; } = Array.Empty<string>();
+
+            public bool IsRunning(DateTime utcNow) => utcNow >= Start && utcNow < End;
+        }
+
+        public sealed class FeaturedInfo
+        {
+            public string Note { get; set; } = string.Empty;
+            /// <summary>Shortnames, in the order the panel lists them.</summary>
+            public IReadOnlyList<string> Songs { get; set; } = Array.Empty<string>();
+        }
+
+        /// <summary>The running season's number if this folder is one of its songs, else 0.</summary>
+        public static int SeasonOf(string? folder, DateTime utcNow)
+        {
+            var season = Season;
+            return season != null && season.IsRunning(utcNow) && ShortnameOf(folder) is { } name && season.Songs.Contains(name)
+                ? season.Number
+                : 0;
+        }
+
+        public static bool IsFeatured(string? folder) =>
+            Featured is { } featured && ShortnameOf(folder) is { } name && featured.Songs.Contains(name);
+
+        /// <summary>The database key of an online song's folder; null for local songs.</summary>
+        public static string? ShortnameOf(string? folder) =>
+            !string.IsNullOrEmpty(folder) && IsOnlineFolder(folder!) ? Path.GetFileName(folder!.TrimEnd('/', Path.DirectorySeparatorChar)) : null;
+
+        internal static SeasonInfo? ReadSeason(JToken? token)
+        {
+            if (token is not JObject season || season["number"]?.Type != JTokenType.Integer ||
+                !DateTime.TryParse((string?) season["start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal |
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var start) ||
+                !DateTime.TryParse((string?) season["end"], null, System.Globalization.DateTimeStyles.AdjustToUniversal |
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var end))
+            {
+                return null;
+            }
+            return new SeasonInfo
+            {
+                Number = (int) season["number"]!,
+                Name = (string?) season["name"] ?? string.Empty,
+                Start = start,
+                End = end,
+                Songs = new HashSet<string>(Names(season["songs"])),
+            };
+        }
+
+        internal static FeaturedInfo? ReadFeatured(JToken? token)
+        {
+            var songs = token is JObject featured ? Names(featured["songs"]).Distinct().ToList() : new List<string>();
+            return songs.Count == 0 ? null : new FeaturedInfo { Note = (string?) token!["note"] ?? string.Empty, Songs = songs };
+        }
+
+        private static IEnumerable<string> Names(JToken? list) =>
+            list is JArray array ? array.Where(t => t.Type == JTokenType.String).Select(t => (string) t!) : Enumerable.Empty<string>();
 
         // Kept from Sync so later media downloads (previews, gameplay) can send it too
         private static volatile string? _apiKey;
@@ -82,10 +162,12 @@ namespace YARG.Core.Song
                 }
 
                 News = db[NEWS_KEY]?.Type == JTokenType.String ? (string) db[NEWS_KEY]! : string.Empty;
+                Season = ReadSeason(db[SEASON_KEY]);
+                Featured = ReadFeatured(db[FEATURED_KEY]);
                 var songs = db.Properties()
                     .Where(p => SHORTNAME.IsMatch(p.Name) && p.Value is JObject)
                     .ToDictionary(p => p.Name, p => (JObject) p.Value);
-                foreach (var name in db.Properties().Select(p => p.Name).Where(n => !songs.ContainsKey(n) && n != NEWS_KEY))
+                foreach (var name in db.Properties().Select(p => p.Name).Where(n => !songs.ContainsKey(n) && !n.StartsWith("_")))
                 {
                     YargLogger.LogFormatWarning("Skipping online song with invalid shortname {0}", name);
                 }
@@ -135,6 +217,10 @@ namespace YARG.Core.Song
                     }
                     using var response = Http.SendAsync(request).GetAwaiter().GetResult();
                     response.EnsureSuccessStatusCode();
+                    if (response.Headers.Date is { } serverTime)
+                    {
+                        Interlocked.Exchange(ref _clockOffsetTicks, (serverTime.UtcDateTime - DateTime.UtcNow).Ticks);
+                    }
                     string text = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     var db = JObject.Parse(text);
                     File.WriteAllText(cached, text);
@@ -252,6 +338,39 @@ namespace YARG.Core.Song
         }
 
         /// <summary>Festival info.json from a database entry, so FestivalSong.ReadInfo handles it.</summary>
+        /// <summary>
+        /// An online song's chart read exactly as the game reads it (the same entry scan, parse settings and lifts),
+        /// for checking runs outside the game (the leaderboard server). songdbEntry is the song's songdb.json entry;
+        /// scratchFolder is an empty folder this may write the song's info file to. Null if the chart can't be read.
+        /// </summary>
+        public static YARG.Core.Chart.SongChart? ReadChart(byte[] chart, JObject songdbEntry, string scratchFolder) =>
+            ReadChartWithInfo(chart, MakeInfo(songdbEntry), scratchFolder);
+
+        /// <summary>As <see cref="ReadChart"/>, from the song's info.json (what the game writes from the songdb entry).</summary>
+        public static YARG.Core.Chart.SongChart? ReadChartWithInfo(byte[] chart, JObject info, string scratchFolder)
+        {
+            if (info["length"] == null)
+            {
+                // Without a length the scan measures the audio, which isn't here; the length doesn't change the chart
+                info = (JObject) info.DeepClone();
+                info["length"] = 1;
+            }
+            Directory.CreateDirectory(scratchFolder);
+            string infoPath = Path.Combine(scratchFolder, FestivalSong.INFO_FILE);
+            File.WriteAllText(infoPath, info.ToString());
+            string key = Key(scratchFolder);
+            Charts[key] = chart;
+            try
+            {
+                var entry = UnpackedIniEntry.ProcessNewEntry(scratchFolder, chart, new FileInfo(infoPath), "");
+                return entry ? entry.Value.LoadChart() : null;
+            }
+            finally
+            {
+                Charts.TryRemove(key, out _);
+            }
+        }
+
         internal static JObject MakeInfo(JObject entry)
         {
             var otherInfo = entry["other_info"] as JObject;
@@ -373,6 +492,20 @@ namespace YARG.Core.Song
 
         /// <summary>True for folders made by <see cref="Sync"/>.</summary>
         public static bool IsOnlineFolder(string folder) => File.Exists(Path.Combine(folder, ENTRY_FILE));
+
+        /// <summary>A short-lived link to an online song's cover (for Discord, which fetches it itself); null for local
+        /// songs, songs without one, or when it can't be signed. Blocks, so call it off the main thread.</summary>
+        public static string? CoverLink(string folder)
+        {
+            if (!IsOnlineFolder(folder) || ReadEntry(folder) is not { } entry)
+            {
+                return null;
+            }
+            string cover = Url(entry, "assets", "cover");
+            return cover.Length > 0 && Leaderboards.SignUrls(new[] { cover }) is { } links && links.TryGetValue(cover, out var link)
+                ? link
+                : null;
+        }
 
         private static JObject? ReadEntry(string folder)
         {

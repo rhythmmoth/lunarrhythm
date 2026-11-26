@@ -156,6 +156,8 @@ namespace YARG.Menu.Settings
             }
 
             _showAdvanced = ShowAdvanced;
+            // The Moonlight board's Settings screen, drawn over this menu (which still owns the tabs and settings)
+            if (_moon == null) _moon = SettingsMoonlight.Create(this, _previewContainerUI);
 
             _headerTabs.RefreshTabs();
             _headerTabs.TabChanged += OnTabChanged;
@@ -182,7 +184,12 @@ namespace YARG.Menu.Settings
                     Refresh();
                 }
             }
+            _moon.OnShown();
         }
+
+        private SettingsMoonlight _moon;
+
+        internal void ToggleAdvancedFromMoonlight() => ToggleAdvanced();
 
         private void OnTabChanged(string tab)
         {
@@ -278,6 +285,7 @@ namespace YARG.Menu.Settings
         {
             UpdateSettings(true);
             RefreshPreview();
+            _moon?.Rebuild();
         }
 
         public void RefreshAndKeepPosition()
@@ -290,6 +298,7 @@ namespace YARG.Menu.Settings
 
             // Restore selection
             _settingsNavGroup.SelectAt(beforeIndex);
+            _moon?.Rebuild(true);
         }
 
         private void UpdateSettings(bool resetScroll)
@@ -360,6 +369,7 @@ namespace YARG.Menu.Settings
 
             CurrentTab?.OnSettingChanged();
             SettingChanged?.Invoke();
+            _moon?.RefreshValues();
         }
 
         public void OnSearchBarChanged()
@@ -383,6 +393,12 @@ namespace YARG.Menu.Settings
 
         private void PushNavigationScheme()
         {
+            if (_moon != null && !_moon.Fallback)
+            {
+                _moon.PushScheme();
+                return;
+            }
+
             string advancedKey = ShowAdvanced
                 ? "Menu.Settings.HideAdvanced"
                 : "Menu.Settings.ShowAdvanced";
@@ -415,6 +431,7 @@ namespace YARG.Menu.Settings
         public void RefreshNavigationScheme()
         {
             Navigator.Instance.PopScheme();
+            _moon?.SchemePopped();
             PushNavigationScheme();
         }
 
@@ -438,6 +455,8 @@ namespace YARG.Menu.Settings
             CurrentTab = null;
 
             Navigator.Instance.PopScheme();
+            _moon?.SchemePopped();
+            _moon?.OnHidden();
             DestroyPreview();
             _headerTabs.TabChanged -= OnTabChanged;
 

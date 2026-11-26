@@ -357,6 +357,7 @@ namespace YARG.Player
             foreach (var profile in _profiles)
             {
                 profile.GrandfatherIn();
+                profile.LeftyFlip = false; // no longer offered on the pad (the Players menu dropped it), so never stuck on
                 _profilesById.Add(profile.Id, profile);
             }
 

@@ -62,7 +62,9 @@ namespace YARG.Menu.Navigation
 
         public void OnPointerMove(PointerEventData eventData)
         {
-            if (_selectOnHover)
+            // Hover moves the highlight (and moon) anywhere a click would; only moving the mouse does, so a resting
+            // cursor never fights the arrow keys
+            if (_selectOnHover || _selectOnClick)
             {
                 SetSelected(true, SelectionOrigin.Mouse);
             }

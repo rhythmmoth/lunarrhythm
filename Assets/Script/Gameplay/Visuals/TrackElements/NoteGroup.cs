@@ -46,8 +46,23 @@ namespace YARG.Gameplay.Visuals
         private MaterialInfo[] _allColoredCache;
         private MaterialInfo[] _coloredMetalMaterialCache;
 
+        // The 2D highway's flat note, standing in for the theme model, with a darker edge under it and a faint shadow
+        // (board NextHighwayDepth, E: notes with a little thickness)
+        private MeshRenderer _flat, _flatEdge;
+        private const float FLAT_DEPTH = 0.2f;
+
+        /// <summary>Drawn as a lift (a triangle) on the 2D highway; set before the first Initialize.</summary>
+        // Serialized so the pool's copies of the note prefab keep it
+        [HideInInspector]
+        public bool FlatLift;
+
+        /// <summary>The flat piece's width across the lane (0 off the 2D highway).</summary>
+        public float FlatWidth => _flat != null ? _flat.transform.localScale.x : 0f;
+        public float FlatHeight => _flat != null ? _flat.transform.localScale.y : 0f;
+
         public void Initialize()
         {
+            if (FlatHighway.Enabled && _flat == null && FlatHighwayArt.Ready) MakeFlat();
             _coloredMaterialCache ??= _themeNote.ColoredMaterials.Select(MaterialInfo.From).ToArray();
             _coloredMaterialNoStarPowerCache ??= _themeNote.ColoredMaterialsNoStarPower.Select(MaterialInfo.From).ToArray();
             _allColoredCache ??= _coloredMaterialCache.Concat(_coloredMaterialNoStarPowerCache).ToArray();
@@ -72,8 +87,45 @@ namespace YARG.Gameplay.Visuals
             }
         }
 
+        /// <summary>Builds the 2D highway's flat note ahead of its first use (see TrackPlayer.PrepareFlatNotes).</summary>
+        public void PrepareFlat()
+        {
+            if (FlatHighway.Enabled && _flat == null && FlatHighwayArt.Ready) MakeFlat();
+        }
+
+        private void MakeFlat()
+        {
+            // Measured and placed in the note group's own space (a theme's model may be rotated or scaled)
+            var footprint = FlatHighwayArt.HideModel(transform);
+            // The pill this note would be (as wide as the model, a fixed depth; a lift's model is 60% of a note), then
+            // the worn shape sized from it. Notes spanning the lanes (opens) stay pills.
+            float pill = Mathf.Max(footprint.size.x * 0.85f, 0.1f) / (FlatLift ? 0.6f : 1f);
+            var art = FlatHighwayArt.Shape(pill > 0.6f ? null : FlatHighwayArt.PlayerOf(this)?.NoteShape);
+            var size = FlatLift ? art.LiftSize : art.NoteSize;
+            float scale = pill > 0.6f ? 1f : FlatHighway.NoteScale; // opens already span the lanes
+            float width = pill * size.x / 56f * scale, depth = FLAT_DEPTH * size.y / 20f * scale;
+            if (scale > 1f) width = Mathf.Min(width, FlatHighway.MaxNoteWidth);
+            var model = transform;
+            var texture = FlatLift ? art.Lift : art.Note;
+            _flat = FlatHighwayArt.Piece(model, "Flat Note", texture, Color.white, width, depth, 0.01f, 0);
+            // The edge shows below the note, toward the strike line (the track's -z)
+            _flatEdge = FlatHighwayArt.Piece(model, "Flat Note Edge", texture, Color.white, width, depth, 0.009f, -1);
+            _flatEdge.transform.localPosition += new Vector3(0f, 0f, -depth * 0.14f);
+            var shadow = FlatHighwayArt.Piece(model, "Flat Note Shadow", FlatHighwayArt.Glow, new Color(0f, 0f, 0f, 0.28f),
+                width * 1.05f, depth * 1.7f, 0.008f, -2);
+            shadow.transform.localPosition += new Vector3(0f, 0f, -depth * 0.1f);
+        }
+
         public void SetColorWithEmission(Color color, Color colorNoStarPower)
         {
+            if (_flat != null)
+            {
+                // The colour it's given: an overdrive note is white (the colour profile's overdrive colour), as before
+                // the 2D highway, rather than its lane colour with an edge
+                FlatHighwayArt.SetColor(_flat, color);
+                FlatHighwayArt.SetColor(_flatEdge, new Color(color.r * 0.7f, color.g * 0.7f, color.b * 0.7f, color.a));
+                return;
+            }
             // Deal with color (with star power)
 
             foreach (var info in _coloredMaterialCache)
@@ -100,7 +152,7 @@ namespace YARG.Gameplay.Visuals
 
         public void SetMetalColor(Color metalColor)
         {
-            if (_coloredMetalMaterialCache.Length == 0) return;
+            if (_flat != null || _coloredMetalMaterialCache.Length == 0) return;
 
             foreach (var info in _coloredMetalMaterialCache)
             {

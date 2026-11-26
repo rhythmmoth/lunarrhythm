@@ -9,6 +9,7 @@ using YARG.Core.Engine;
 using YARG.Core.Engine.Keys;
 using YARG.Gameplay.Player;
 using YARG.Helpers.Extensions;
+using YARG.Settings;
 using YARG.Themes;
 
 namespace YARG.Gameplay.Visuals
@@ -64,6 +65,9 @@ namespace YARG.Gameplay.Visuals
                     MakeTriangle(StarPowerNoteGroups[(int) NoteType.Lift]);
                 }
             }
+
+            NoteGroups[(int) NoteType.Lift].FlatLift = true;
+            StarPowerNoteGroups[(int) NoteType.Lift].FlatLift = true;
         }
 
         private static void MakeTriangle(NoteGroup group)
@@ -205,6 +209,7 @@ namespace YARG.Gameplay.Visuals
             // Show and set material properties
             NoteGroup.SetActive(true);
             NoteGroup.Initialize();
+            SetUpConnector();
 
             // Set line length
             if (NoteRef.IsSustain)
@@ -246,6 +251,7 @@ namespace YARG.Gameplay.Visuals
             base.UpdateElement();
 
             UpdateSustain();
+            UpdateConnector();
         }
 
         protected override void OnNoteStateChanged()
@@ -306,9 +312,63 @@ namespace YARG.Gameplay.Visuals
             _sustainLine.SetState(SustainState, color.ToUnityColor());
         }
 
+        // The 2D highway's lift connector (board NextHighway, "Beam"): a beam from the lift's base back to the note
+        // you're holding in that lane, cut off at the strike line as the held note passes it
+        private const float CONNECTOR_GAP = 0.05f;
+        private MeshRenderer _connector;
+        private float _connectorLength;
+
+        private void SetUpConnector()
+        {
+            var held = FlatHighway.Enabled && FlatHighwayArt.Ready && NoteRef.IsLift && NoteGroup.FlatLift
+                && SettingsManager.Settings.LiftConnectors.Value ? HeldNoteBefore(NoteRef) : null;
+            if (held == null)
+            {
+                if (_connector != null) _connector.enabled = false;
+                return;
+            }
+
+            _connector ??= FlatHighwayArt.Piece(transform, "Flat Lift Connector", FlatHighwayArt.Beam, Color.white,
+                1f, 1f, 0.005f, -1);
+            _connector.enabled = true;
+            _connectorLength = (float) (NoteRef.Time - held.Time) * Player.NoteSpeed;
+            var colors = Player.Player.ColorProfile.FiveFretGuitar;
+            FlatHighwayArt.SetColor(_connector, (NoteRef.IsStarPower // white with its overdrive lift
+                ? colors.GetNoteStarPowerColor(NoteRef.Fret) : colors.GetNoteColor(NoteRef.Fret)).ToUnityColor());
+            UpdateConnector();
+        }
+
+        // The last note in this lane before the lift, unless that was a lift too (nothing is held then)
+        private static GuitarNote HeldNoteBefore(GuitarNote lift)
+        {
+            for (var parent = lift.ParentOrSelf.PreviousNote; parent != null; parent = parent.PreviousNote)
+            {
+                foreach (var note in parent.AllNotes)
+                {
+                    if (note.Fret == lift.Fret) return note.IsLift ? null : note;
+                }
+            }
+            return null;
+        }
+
+        private void UpdateConnector()
+        {
+            if (_connector == null || !_connector.enabled) return;
+            float far = -NoteGroup.FlatHeight / 2f;
+            float near = -_connectorLength + NoteGroup.FlatHeight / 2f + CONNECTOR_GAP;
+            near = Mathf.Max(near, TrackPlayer.STRIKE_LINE_POS - transform.localPosition.z);
+            float length = far - near;
+            // shortcut: the beam squashes (not crops) as it's cut at the strike line; crop by UVs if it reads wrong
+            var t = _connector.transform;
+            t.localScale = new Vector3(NoteGroup.FlatWidth, Mathf.Max(length, 0.0001f), 1f);
+            t.localPosition = new Vector3(0f, 0.005f, (far + near) / 2f);
+            _connector.gameObject.SetActive(length > 0.01f);
+        }
+
         protected override void HideElement()
         {
             HideNotes();
+            if (_connector != null) _connector.enabled = false;
 
             _normalSustainLine.gameObject.SetActive(false);
             _openSustainLine.gameObject.SetActive(false);

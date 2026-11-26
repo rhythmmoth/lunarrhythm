@@ -2,6 +2,7 @@
 using System.Linq;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
@@ -36,10 +37,7 @@ namespace YARG.Gameplay.Player
 
         public override bool ShouldUpdateInputsOnResume => false;
 
-        protected override float[] StarMultiplierThresholds { get; set; } =
-        {
-            0.05f, 0.11f, 0.19f, 0.46f, 0.77f, 1.06f
-        };
+        protected override float[] StarMultiplierThresholds { get; set; } = StarThresholds.Vocals;
 
         private InstrumentDifficulty<VocalNote> NoteTrack { get; set; }
         private InstrumentDifficulty<VocalNote> OriginalNoteTrack { get; set; }
@@ -167,7 +165,8 @@ namespace YARG.Gameplay.Player
             HitWindow = EngineParams.HitWindow;
 
             var engine = new YargVocalsEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot);
-            EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Player.Profile.HarmonyIndex, _chart, Player.RockMeterPreset);
+            // Others' highways stay out of band scoring, star power and the fail meter
+            if (!Player.IsRemote) EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Player.Profile.HarmonyIndex, _chart, Player.RockMeterPreset);
 
             engine.OnComboIncrement += OnComboIncrement;
             engine.OnComboReset += OnComboReset;
@@ -206,7 +205,7 @@ namespace YARG.Gameplay.Player
 
             engine.OnNoteMissed += (_, _) =>
             {
-                if (LastCombo >= 2)
+                if (LastCombo >= 2 && !Player.IsRemote)
                 {
                     GlobalAudioHandler.PlaySoundEffect(SfxSample.NoteMiss);
                 }

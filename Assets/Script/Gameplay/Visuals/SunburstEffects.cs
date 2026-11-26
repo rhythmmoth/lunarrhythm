@@ -56,6 +56,14 @@ namespace YARG.Gameplay.Visuals
             _grooveSunburstLightColor = _light.color;
             _lightIntensity = _light.intensity;
 
+            // The 2D highway has no sunburst halo under the strike line (it clashed with the flat look); the
+            // animations below still run, unseen
+            if (FlatHighway.Enabled)
+            {
+                _sunburstEffect.GetComponent<SpriteRenderer>().enabled = false;
+                _light.enabled = false;
+            }
+
             // Set up tweens for later use
             _sunburstPulseTween = _sunburstEffect.transform.DOScale(_originalScale * 0.85f, 0.25f).SetAutoKill(false)
                 .SetEase(Ease.OutSine).Pause();

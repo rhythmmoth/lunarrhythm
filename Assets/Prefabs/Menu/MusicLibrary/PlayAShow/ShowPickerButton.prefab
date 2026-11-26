@@ -31,7 +31,6 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 9154763036977806440}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -69,8 +68,7 @@ MonoBehaviour:
   m_text: _
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 19b7115073766a24aa48ceca884dcbf5, type: 2}
-  m_sharedMaterial: {fileID: 4249517445589659644, guid: 19b7115073766a24aa48ceca884dcbf5,
-    type: 2}
+  m_sharedMaterial: {fileID: 4249517445589659644, guid: 19b7115073766a24aa48ceca884dcbf5, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -105,20 +103,23 @@ MonoBehaviour:
   m_VerticalAlignment: 4096
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
   m_charWidthMaxAdj: 0
-  m_enableWordWrapping: 1
+  m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
   m_overflowMode: 0
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 1
+  m_ActiveFontFeatures: 6e72656b
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
   m_isRichText: 1
+  m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1
   m_isCullingEnabled: 0
@@ -171,7 +172,6 @@ RectTransform:
   m_Children:
   - {fileID: 9154763036977806440}
   m_Father: {fileID: 0}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -207,8 +207,7 @@ MonoBehaviour:
     m_ColorMultiplier: 1
     m_FadeDuration: 0.1
   m_SpriteState:
-    m_HighlightedSprite: {fileID: 21300000, guid: d3b0f548d717a64409a784af245a58cf,
-      type: 3}
+    m_HighlightedSprite: {fileID: 21300000, guid: d3b0f548d717a64409a784af245a58cf, type: 3}
     m_PressedSprite: {fileID: 21300000, guid: b511bbfffd0ea184ba6ffda09d17f88c, type: 3}
     m_SelectedSprite: {fileID: 21300000, guid: d3b0f548d717a64409a784af245a58cf, type: 3}
     m_DisabledSprite: {fileID: 21300000, guid: b511bbfffd0ea184ba6ffda09d17f88c, type: 3}
@@ -249,6 +248,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _buttonImage: {fileID: 5439468768656205435}
   _buttonBackground: {fileID: 7617404234607777830}
+  ButtonText: {fileID: 0}
   _button: {fileID: 412450321716482520}
   _dialog: {fileID: 0}
 --- !u!114 &440116509921864197
@@ -348,7 +348,6 @@ RectTransform:
   m_Children:
   - {fileID: 2919596403338703147}
   m_Father: {fileID: 6073794641953995833}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -376,7 +375,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.09019608, g: 0.8862745, b: 0.5372549, a: 1}
+  m_Color: {r: 0.9529412, g: 0.9098039, b: 0.8, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

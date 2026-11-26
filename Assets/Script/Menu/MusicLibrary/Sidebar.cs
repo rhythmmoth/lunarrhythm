@@ -111,11 +111,16 @@ namespace YARG.Menu.MusicLibrary
             { ("guitar", "LEAD"), ("bass", "BASS"), ("drums", "DRUMS"), ("vocals", "VOCALS") };
 
         private LeaderboardCard _leaderboard;
+        private LibrarySidebar _moon;
+
+        /// <summary>The selected song's cover (null until it loads), for the song options popup.</summary>
+        internal Texture CoverTexture => _albumCoverSmall.texture;
         private int _boardIndex;
         private SongEntry _boardSong;
 
         public void Initialize(MusicLibraryMenu musicLibraryMenu, SongSearchingField songSearchingField)
         {
+            LibraryMoonlight.StylePlayButton(_playButton);
             _musicLibraryMenu = musicLibraryMenu;
             _songSearchingField = songSearchingField;
 
@@ -156,7 +161,10 @@ namespace YARG.Menu.MusicLibrary
                 // Only cosmetic: the library must still open if the prefab changes shape
                 YARG.Core.Logging.YargLogger.LogException(e, "Couldn't compact the sidebar layout");
             }
-            _leaderboard = LeaderboardCard.Create(sidebarColumn, _charter.font);
+            // The Moonlight board's panel takes over: the Play button and cover move into it, the old column hides
+            _moon = LibrarySidebar.Create(transform, _playButton, _albumCoverSmall, SelectBoard);
+            sidebarColumn.gameObject.SetActive(false);
+            _leaderboard = LeaderboardCard.Create(_moon.BoardParent, _charter.font);
             _boardIndex = DefaultBoard();
 
             UpdatePlayButtonLabel(_musicLibraryMenu.ShowPlaylist.Count > 0);
@@ -345,6 +353,7 @@ namespace YARG.Menu.MusicLibrary
             _leaderboard.Hide();
             _playButton.DisableButton();
             _favoriteButton.DisableButton();
+            _moon.Clear();
 
             _year.text = string.Empty;
             _length.text = string.Empty;
@@ -407,6 +416,7 @@ namespace YARG.Menu.MusicLibrary
             }
 
             UpdateDifficulties(songEntry);
+            _moon.ShowSong(songEntry);
             _boardSong = songEntry;
             ShowBoard();
 

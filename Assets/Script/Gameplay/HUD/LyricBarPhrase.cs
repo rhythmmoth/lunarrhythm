@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Cysharp.Text;
 using DG.Tweening;
 using TMPro;
@@ -57,6 +57,12 @@ namespace YARG.Gameplay.HUD
             _builder = ZString.CreateStringBuilder(false);
             // This should improve performance slightly by avoiding the need to call GetComponent
             _lyricTextTransform = _lyricText.rectTransform;
+
+            // The Moonlight board's lyrics: Barlow bold, white, with the sung words in moon cream
+            if (YARG.Menu.Moonlight.Body != null) _lyricText.font = YARG.Menu.Moonlight.Body;
+            _lyricText.fontWeight = TMPro.FontWeight.Bold;
+            _lyricText.fontSize = 42f;
+            _lyricText.color = YARG.Menu.Moonlight.Text;
         }
 
         protected override void GameplayDestroy()
@@ -224,7 +230,7 @@ namespace YARG.Gameplay.HUD
             _builder.Clear();
             // Highlighted words (none for a line with no word timing)
             int highlighted = lyrics.Count > 0 && lyrics[0].LineTimed ? 0 : _currentLyricIndex;
-            _builder.Append("<color=#5CB9FF>");
+            _builder.Append("<color=#F3E8CC>");
             int i = 0;
             while (i < highlighted)
             {

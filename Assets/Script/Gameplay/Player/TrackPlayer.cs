@@ -12,6 +12,7 @@ using YARG.Core.Logging;
 using YARG.Gameplay.HUD;
 using YARG.Gameplay.Visuals;
 using YARG.Helpers;
+using YARG.Helpers.Extensions;
 using YARG.Playback;
 using YARG.Player;
 using YARG.Settings;
@@ -96,6 +97,9 @@ namespace YARG.Gameplay.Player
                 return;
             }
 
+            // The 2D highway's flat pieces are drawn with the beat line's material: hand it over before frets and notes
+            if (Visuals.FlatHighway.Enabled) Visuals.FlatHighwayArt.Use(BeatlinePool.Prefab);
+
             Initialize(index, player, chart, lastHighScore);
 
             TrackView = trackView;
@@ -108,7 +112,7 @@ namespace YARG.Gameplay.Player
 
             // Set fade information and highway length
             ZeroFadePosition = DEFAULT_ZERO_FADE_POS * Player.Profile.HighwayLength;
-            FadeSize = Player.CameraPreset.FadeLength;
+            FadeSize = Visuals.FlatHighway.ViewOf(Player).FadeLength;
 
             _spawnAheadDelay = GameManager.IsPractice ? SettingsManager.Settings.PracticeRestartDelay.Value : 2;
             if (player.Profile.HighwayLength > 1)
@@ -131,7 +135,30 @@ namespace YARG.Gameplay.Player
                 or Instrument.ProBass_17Fret
                 or Instrument.ProBass_22Fret;
 
-            TrackView.ShowPlayerName(player);
+            // In a group (local or online) the 2D highway gets a name tag above it, and its multiplier and Overdrive
+            // meter shrink into the column, so nothing reaches into a neighbour's
+            // (counted from who's playing: GameManager.Players only fills as each highway is set up)
+            CompactHud = Visuals.FlatHighway.Enabled
+                && (System.Linq.Enumerable.Count(GameManager.YargPlayers, p => !p.SittingOut) > 1 || Menu.Online.LobbyPlay.Playing);
+            if (CompactHud) TrackView.ShowTag(player, !player.IsRemote);
+            else TrackView.ShowPlayerName(player);
+        }
+
+        /// <summary>The 2D highway in a group: a name tag above it, and the multiplier and meter inside it.</summary>
+        protected bool CompactHud { get; set; }
+
+        /// <summary>A lobby player who left mid-song: their highway stops where their presses ended.</summary>
+        public void ShowLeft()
+        {
+            Player.Profile.Name += " · left";
+            if (CompactHud) TrackView.SetTagNote("Left");
+            else TrackView.ShowPlayerName(Player);
+        }
+
+        /// <summary>A lobby player whose connection broke: their column dims while they reconnect.</summary>
+        public void ShowAway(bool away)
+        {
+            if (CompactHud) TrackView.SetTagNote(away ? "Reconnecting…" : null);
         }
 
         protected override void ResetVisuals()
@@ -230,7 +257,9 @@ namespace YARG.Gameplay.Player
             var events = NoteTrack.TextEvents;
 
             Engine = CreateEngine();
-            base.ComboMeter.Initialize(player.EnginePreset, Engine.BaseParameters.MaxMultiplier, GameManager.Players.Count > 1);
+            StarpowerBar.Compact = CompactHud;
+            base.ComboMeter.Initialize(player.EnginePreset, Engine.BaseParameters.MaxMultiplier, GameManager.Players.Count > 1,
+                FlatHighway.IsUpscroll(player), CompactHud);
 
             Engine.OnComboIncrement += OnComboIncrement;
             Engine.OnComboReset += OnComboReset;
@@ -354,8 +383,47 @@ namespace YARG.Gameplay.Player
         protected virtual void FinishInitialization()
         {
             TrackMaterial.Initialize(Player.HighwayPreset);
-            CameraPositioner.Initialize(Player.CameraPreset);
+            CameraPositioner.Initialize(Visuals.FlatHighway.ViewOf(Player));
             FinalizeTrackEffects();
+            if (Visuals.FlatHighway.Enabled)
+            {
+                AddLaneDividers();
+                PrepareFlatNotes();
+            }
+        }
+
+        // Builds the 2D highway's art and the first pooled notes' flat pieces now, while loading, so the first notes
+        // don't hitch as the veil lifts (the rest of the pool builds its own as it's first used)
+        private void PrepareFlatNotes()
+        {
+            Visuals.FlatHighwayArt.Shape(Player.NoteShape);
+            _ = Visuals.FlatHighwayArt.Glow;
+            _ = Visuals.FlatHighwayArt.Dot;
+            _ = Visuals.FlatHighwayArt.CircleRing;
+            _ = Visuals.FlatHighwayArt.Beam;
+            int prepared = 0;
+            foreach (var group in NotePool.GetComponentsInChildren<Visuals.NoteGroup>(true))
+            {
+                group.PrepareFlat();
+                if (++prepared >= 400) break;
+            }
+        }
+
+        // The 2D highway's thin lines between lanes, from just under the strike line to where notes fade in
+        private void AddLaneDividers()
+        {
+            if (LaneCount < 2 || !Visuals.FlatHighwayArt.Ready) return;
+            float near = STRIKE_LINE_POS - 3f, far = ZeroFadePosition; // to the screen's bottom edge
+            // In the worn highway look's second colour, or a faint moonlight blue
+            var color = Visuals.FlatHighway.IsThemed(Player.HighwayPreset)
+                ? Player.HighwayPreset.BackgroundBaseColor2.ToUnityColor().WithAlpha(0.22f)
+                : new Color(0.627f, 0.686f, 1f, 0.14f);
+            for (int i = 1; i < LaneCount; i++)
+            {
+                var divider = Visuals.FlatHighwayArt.Piece(transform, "Lane Divider", Visuals.FlatHighwayArt.Solid, color,
+                    0.012f, far - near, 0.002f, -5);
+                divider.transform.localPosition = new Vector3(-TRACK_WIDTH / 2f + i * TRACK_WIDTH / LaneCount, 0.002f, (near + far) / 2f);
+            }
         }
 
         protected void ResetNoteCounters()
@@ -411,6 +479,7 @@ namespace YARG.Gameplay.Player
         {
             // Allow the HUD to track the highway with animations
             TrackView.UpdateHUDPosition(HighwayIndex, HighwayCount);
+            if (CompactHud) TrackView.UpdateTag(Score, Combo, IsFc);
 
             UpdateNotes(visualTime);
             UpdateBeatlines(visualTime);
@@ -1046,7 +1115,7 @@ namespace YARG.Gameplay.Player
 
                 if (LastCombo >= 10)
                 {
-                    GlobalAudioHandler.PlaySoundEffect(SfxSample.NoteMiss);
+                    if (!Player.IsRemote) GlobalAudioHandler.PlaySoundEffect(SfxSample.NoteMiss);
                     CameraPositioner.Punch();
                 }
 
@@ -1146,11 +1215,13 @@ namespace YARG.Gameplay.Player
 
         public void MetronomeTick()
         {
+            if (Player.IsRemote) return;
             GlobalAudioHandler.PlayMetronomeSoundEffect(SettingsManager.Settings.MetronomeSound.Value, MetronomePitch.Hi);
         }
 
         public void MetronomeTock()
         {
+            if (Player.IsRemote) return;
             GlobalAudioHandler.PlayMetronomeSoundEffect(SettingsManager.Settings.MetronomeSound.Value, MetronomePitch.Lo);
         }
     }

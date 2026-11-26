@@ -43,7 +43,7 @@ namespace YARG
 
         public SceneIndex CurrentScene { get; private set; } = SceneIndex.Persistent;
 
-        public string CurrentVersion { get; private set; } = "v1.0.0";
+        public string CurrentVersion { get; private set; } = "v2.0.0";
 
         protected override void SingletonAwake()
         {
@@ -173,11 +173,19 @@ namespace YARG
 
             await Resources.UnloadUnusedAssets();
             GC.Collect();
+            // After the clean-up, so its hitch happens under the night rather than mid-fade
+            YARG.Menu.Moonrise.Lift();
         }
 
         public void LoadScene(SceneIndex scene)
         {
             Navigator.Instance.DisableMenuInputs = true;
+            // The screen fades to night first, and lifts once the next scene is up: no black frame between them
+            YARG.Menu.Moonrise.Cover(() => SwapScene(scene));
+        }
+
+        private void SwapScene(SceneIndex scene)
+        {
             // Unload the current scene and load in the new one, or just load in the new one
             if (CurrentScene != SceneIndex.Persistent)
             {

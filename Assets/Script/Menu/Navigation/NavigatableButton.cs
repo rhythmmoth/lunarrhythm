@@ -26,6 +26,13 @@ namespace YARG.Menu.Navigation
             _onClick.RemoveAllListeners();
         }
 
+        /// <summary>Like <see cref="SetOnClickEvent"/>, but also drops the listeners set in the editor (for copies).</summary>
+        public void ReplaceOnClickEvent(UnityAction a)
+        {
+            _onClick = new Button.ButtonClickedEvent();
+            _onClick.AddListener(a);
+        }
+
         public void SetOnClickEvent(UnityAction a)
         {
             _onClick.RemoveAllListeners();

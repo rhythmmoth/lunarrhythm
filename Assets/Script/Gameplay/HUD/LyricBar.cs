@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
@@ -55,7 +55,9 @@ namespace YARG.Gameplay.HUD
             switch (lyricSetting)
             {
                 case LyricDisplayMode.Normal:
-                    _normalBackground.SetActive(true);
+                    // The Moonlight board drops the gradient bar: plain text near the top, the sung part in moon cream
+                    _normalBackground.SetActive(false);
+                    ((RectTransform) _canvas.transform).anchoredPosition += new Vector2(0f, 49f);
                     _transparentBackground.SetActive(false);
                     break;
                 case LyricDisplayMode.Transparent:

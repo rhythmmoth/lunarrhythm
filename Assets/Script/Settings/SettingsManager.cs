@@ -38,17 +38,13 @@ namespace YARG.Settings
                 new ButtonRowMetadata(nameof(Settings.SignInWithDiscord)) { Visible = () => !YARG.Core.Song.Leaderboards.SignedIn },
                 new ButtonRowMetadata(nameof(Settings.SignOutOfLeaderboards)) { Visible = () => YARG.Core.Song.Leaderboards.SignedIn },
 
+                new HeaderMetadata("Help"),
+                new ButtonRowMetadata(nameof(Settings.ReplayTour)),
+
                 new HeaderMetadata("Calibration"),
-                new ButtonRowMetadata(nameof(Settings.OpenCalibrator)),
                 nameof(Settings.AudioCalibration),
                 nameof(Settings.VideoCalibration),
                 new FieldMetadata(nameof(Settings.AccountForHardwareLatency), true, isAdvanced: true),
-
-                new HeaderMetadata("Venues"),
-                new ButtonRowMetadata(nameof(Settings.OpenVenueFolder)),
-                new FieldMetadata(nameof(Settings.DisableGlobalBackgrounds), isAdvanced: true),
-                nameof(Settings.DisablePerSongBackgrounds),
-                new FieldMetadata(nameof(Settings.WaitForSongVideo), isAdvanced: true),
 
                 new HeaderMetadata("Gameplay"),
                 nameof(Settings.OverdriveHitsNotes),
@@ -64,17 +60,9 @@ namespace YARG.Settings
                 nameof(Settings.PauseOnFocusLoss),
                 nameof(Settings.MuteOnFocusLoss),
                 nameof(Settings.WrapAroundNavigation),
+                nameof(Settings.MenuAnimations),
+                nameof(Settings.DiscordRichPresence),
                 new FieldMetadata(nameof(Settings.AmIAwesome), isAdvanced: true),
-            },
-            new MetadataTab("SongManager", icon: "Songs")
-            {
-                new HeaderMetadata("MusicLibrary"),
-                nameof(Settings.MaxSongRating),
-                nameof(Settings.ShowFavoriteButton),
-                nameof(Settings.DifficultyRings),
-                nameof(Settings.HighScoreInfo),
-                new FieldMetadata(nameof(Settings.ShowPercentDecimals), isAdvanced: true),
-                nameof(Settings.HighScoreHistory),
             },
             new MetadataTab("Sound", icon: "Sound")
             {
@@ -124,6 +112,10 @@ namespace YARG.Settings
                 new FieldMetadata(nameof(Settings.DisableBloom), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.DisableFilmGrain), isAdvanced: true),
                 nameof(Settings.StarPowerHighwayFx),
+                nameof(Settings.GameBackground),
+                nameof(Settings.VisualizerStyle),
+                nameof(Settings.VisualizerIntensity),
+                nameof(Settings.TrackOpacity),
                 nameof(Settings.SongBackgroundOpacity),
                 new FieldMetadata(nameof(Settings.VenueRenderingQuality), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.VenueAntiAliasing), isAdvanced: true),
@@ -132,8 +124,10 @@ namespace YARG.Settings
 
                 new HeaderMetadata("Gameplay"),
                 new FieldMetadata(nameof(Settings.UseThreeLaneLyricsInHarmony), isAdvanced: true),
+                nameof(Settings.FlatHighway),
                 nameof(Settings.EnableTrackEffects),
                 nameof(Settings.EnableHighwayAnimation),
+                nameof(Settings.LiftConnectors),
                 new FieldMetadata(nameof(Settings.KickBounceMultiplier), isAdvanced: true),
                 new FieldMetadata(nameof(Settings.HighwayTiltMultiplier), isAdvanced: true),
 
@@ -149,7 +143,6 @@ namespace YARG.Settings
                 nameof(Settings.GraphicalProgressOnScoreBox),
                 nameof(Settings.KeepSongInfoVisible),
             },
-            new PresetsTab("Presets", icon: "Customization"),
             new AllSettingsTab(),
         };
 
@@ -257,9 +250,13 @@ namespace YARG.Settings
             // If null, recreate
             Settings ??= new SettingContainer();
 
-            // Pad game: no crowd audio and no Discord presence, whatever an older settings file says
+            // Pad game: no crowd audio, whatever an older settings file says
             Settings.UseCrowdFx.SetValueWithoutNotify(CrowdFxMode.Disabled);
-            Settings.DiscordRichPresence.SetValueWithoutNotify(DiscordRichPresenceMode.Hide);
+            if (!Settings.DiscordPresenceDefaulted)
+            {
+                Settings.DiscordRichPresence.SetValueWithoutNotify(DiscordRichPresenceMode.Show);
+                Settings.DiscordPresenceDefaulted = true;
+            }
 
             // Options removed from the menus for a simpler game: pin them so an older settings file can't keep them on
             Settings.NoFail.SetValueWithoutNotify(NoFailMode.NoMeter);
@@ -272,6 +269,12 @@ namespace YARG.Settings
             Settings.ShowTime.SetValueWithoutNotify(false);
             Settings.MemoryStats.SetValueWithoutNotify(false);
             Settings.ShowActivePlayers.SetValueWithoutNotify(false);
+            // The Songs tab, the Venues section and the Presets tab are gone: nothing hidden there may still filter
+            // songs or change how a song looks
+            Settings.MaxSongRating.SetValueWithoutNotify(YARG.Core.Song.SongRating.None);
+            Settings.DisableGlobalBackgrounds.SetValueWithoutNotify(false);
+            Settings.DisablePerSongBackgrounds.SetValueWithoutNotify(false);
+            Settings.WaitForSongVideo.SetValueWithoutNotify(true);
             Settings.ShowActiveBots.SetValueWithoutNotify(false);
             Settings.LibrarySort = SortAttribute.Name;
 

@@ -24,6 +24,7 @@ namespace YARG.Gameplay.Visuals
         private static readonly int _layer4ColorProperty = Shader.PropertyToID("_Layer_4_Color");
 
         private static readonly int _starPowerColorProperty = Shader.PropertyToID("_Starpower_Color");
+        private static readonly int _starpowerTextureProperty = Shader.PropertyToID("_Starpower_Texture");
 
         private static readonly int _baseTextureProperty = Shader.PropertyToID("_Layer_2_Texture");
         private static readonly int _baseParallaxProperty = Shader.PropertyToID("_Layer_2_Parallax");
@@ -194,10 +195,88 @@ namespace YARG.Gameplay.Visuals
             _material.SetFloat(_sideWavinessProperty, _normalPreset.SideWaviness);
 
             SetTextures();
+
+            if (FlatHighway.Enabled)
+            {
+                // The 2D highway: plain lanes, no textured or scrolling layers (the lane dividers are drawn
+                // separately). Night unless a highway look is worn: then its base colour, and a streak shifts it
+                // toward the look's pattern colour (not to the preset's own groove colours)
+                var lanes = new Color(0.016f, 0.031f, 0.094f, 1f);
+                var streak = Color.Lerp(lanes, new Color(0.106f, 0.165f, 0.42f, 1f), 0.5f);
+                if (FlatHighway.IsThemed(highwayPreset))
+                {
+                    lanes = _normalPreset.Layer1.WithAlpha(1f);
+                    streak = Color.Lerp(lanes, _normalPreset.Layer4.WithAlpha(1f), 0.35f);
+                }
+                _normalPreset.Layer1 = lanes;
+                _normalPreset.Layer2 = _normalPreset.Layer3 = _normalPreset.Layer4 = Color.clear;
+                _groovePreset.Layer1 = streak;
+                _groovePreset.Layer2 = _groovePreset.Layer3 = _groovePreset.Layer4 = Color.clear;
+                _material.SetFloat(_baseWavinessProperty, 0f);
+                _material.SetFloat(_sideWavinessProperty, 0f);
+                GrooveState = _grooveState;
+                // Overdrive lights the lanes with a soft cream glow, not the 3D theme's swirls: the swirl patterns
+                // themselves go (overdrive brightens them even with their colour layers cleared)
+                _material.SetTexture(_baseTextureProperty, Texture2D.blackTexture);
+                _material.SetTexture(_sidePatternProperty, Texture2D.blackTexture);
+                _material.SetTexture(_starpowerTextureProperty, Texture2D.whiteTexture);
+                _material.SetColor(_starPowerColorProperty, new Color(0.953f, 0.91f, 0.8f, 0.35f));
+                MakeFlatLanes(lanes, streak);
+            }
+        }
+
+        // The 2D highway's lanes: one flat piece in the look's colour over the track (whose shader shades its base
+        // colour, so a look wouldn't show as itself), from below the screen's bottom edge to where notes fade in.
+        // A streak shifts it to the streak colour and overdrive warms it toward cream.
+        private MeshRenderer _flatLanes;
+        private Color _flatLanesColor, _flatStreakColor;
+        private static readonly Color FlatOverdrive = new(0.953f, 0.91f, 0.8f, 1f);
+
+        private void MakeFlatLanes(Color lanes, Color streak)
+        {
+            _flatLanesColor = lanes;
+            _flatStreakColor = streak;
+            var player = GetComponentInParent<Player.TrackPlayer>();
+            if (_flatLanes != null || player == null || !FlatHighwayArt.Ready) return;
+            float near = Player.TrackPlayer.STRIKE_LINE_POS - 3f, far = player.ZeroFadePosition;
+            _flatLanes = FlatHighwayArt.Piece(player.transform, "Flat Lanes", FlatHighwayArt.Solid, lanes,
+                Player.TrackPlayer.TRACK_WIDTH, far - near, 0.001f, -10);
+            _flatLanes.transform.localPosition = new Vector3(0f, 0.001f, (near + far) / 2f);
+            // Depth (board NextHighwayDepth, E): light pooling at the strike line in the look's second colour (moonlight
+            // without one), and the rails shading the lane edges
+            var preset = player.Player?.HighwayPreset;
+            var tint = FlatHighway.IsThemed(preset) ? preset.BackgroundBaseColor2.ToUnityColor() : new Color(0.627f, 0.686f, 1f);
+            float top = Player.TrackPlayer.STRIKE_LINE_POS + 4f;
+            var light = FlatHighwayArt.Piece(player.transform, "Flat Lane Light", FlatHighwayArt.LaneLight,
+                Color.Lerp(tint, Color.white, 0.5f).WithAlpha(0.16f), Player.TrackPlayer.TRACK_WIDTH, top - near, 0.0013f, -9);
+            light.transform.localPosition = new Vector3(0f, 0.0013f, (near + top) / 2f);
+            var shade = FlatHighwayArt.Piece(player.transform, "Flat Rail Shade", FlatHighwayArt.RailShade,
+                new Color(0f, 0f, 0f, 0.4f), Player.TrackPlayer.TRACK_WIDTH, far - near, 0.0016f, -8);
+            shade.transform.localPosition = new Vector3(0f, 0.0016f, (near + far) / 2f);
+            // The side trims end a little under the strike line; stretch them down with the lanes to the screen's edge
+            foreach (var trim in _trackTrims)
+            {
+                var t = trim.transform;
+                float min = player.transform.InverseTransformPoint(trim.bounds.min).z;
+                float max = player.transform.InverseTransformPoint(trim.bounds.max).z;
+                if (min <= near || max - min < 0.01f) continue;
+                t.localScale = t.localScale.WithZ(t.localScale.z * (max - near) / (max - min));
+                float shift = near - player.transform.InverseTransformPoint(trim.bounds.min).z;
+                t.position += player.transform.forward * shift;
+            }
+            // The lanes stand in for the track's own surface, which would stay solid under them at a lower opacity
+            _trackMesh.enabled = false;
         }
 
         private void Update()
         {
+            if (_flatLanes != null)
+            {
+                var colour = Color.Lerp(_flatLanesColor, _flatStreakColor, GrooveState);
+                colour = Color.Lerp(colour, FlatOverdrive, 0.22f * StarpowerState);
+                FlatHighwayArt.SetColor(_flatLanes, colour.WithAlpha(SettingsManager.Settings.TrackOpacity.Value));
+            }
+
             if (GrooveMode)
             {
                 GrooveState = Mathf.Lerp(GrooveState, 1f, Time.deltaTime * 5f);

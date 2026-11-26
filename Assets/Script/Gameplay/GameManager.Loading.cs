@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using YARG.Core;
@@ -288,10 +289,38 @@ namespace YARG.Gameplay
             YargLogger.LogFormatDebug("Audio calibration: {0}, video calibration: {1}, song offset: {2}",
                 _songRunner.AudioCalibration, _songRunner.VideoCalibration, _songRunner.SongOffset);
 
+            // Into the song: night over the loading screen, the first frames (shaders, highways, visualizer) settle
+            // under it, then the song starts under it too and it lifts once those frames (notes spawning, the HUD)
+            // run smoothly, at most a second into the 2 s lead-in. Not for a lobby: its start is a server time, so
+            // its loading screen stays until then.
+            if (!Menu.Online.LobbyPlay.Playing)
+            {
+                await Moonrise.CoverAsync();
+                LoadingScreen.Instance.gameObject.SetActive(false);
+                await Moonrise.WaitUntilSmooth();
+            }
+
+            // A lobby song starts for everyone at one server time; the loading screen stays until then
+            if (Menu.Online.LobbyPlay.Playing)
+            {
+                context.SetLoadingText("Syncing with the lobby");
+                if (!await Menu.Online.LobbyPlay.WaitForStart(SongLength, LobbySetup(), AddLobbyPlayers, context.SetSubText))
+                {
+                    ToastManager.ToastWarning("The lobby went on without you.");
+                    global.LoadScene(SceneIndex.Menu);
+                    return;
+                }
+            }
+
             // Loaded, enable updates
             enabled = true;
             IsSongStarted = true;
             _songStarted?.Invoke();
+            if (!Menu.Online.LobbyPlay.Playing)
+            {
+                await WaitForFirstFrames();
+                Moonrise.Lift(0.5f);
+            }
         }
 
         private void ApplySampleNormalization()
@@ -421,17 +450,156 @@ namespace YARG.Gameplay
             _songLoaded?.Invoke();
         }
 
+        /// <summary>This player's setup for the others in the lobby: their replay frame, before any presses.</summary>
+        private string LobbySetup()
+        {
+            try
+            {
+                return _players.FirstOrDefault(p => !p.Player.Profile.IsBot) is { } me
+                    ? Lobby.EncodeSetup(me.ConstructReplayData().Frame)
+                    : null;
+            }
+            catch (Exception e)
+            {
+                // Without it the others just don't see this highway
+                YargLogger.LogException(e, "Couldn't make the lobby setup");
+                return null;
+            }
+        }
+
+        /// <summary>The other lobby players' highways, driven by the presses they stream. Kept apart from
+        /// <see cref="_players"/>, so they're never scored, saved or part of the band.</summary>
+        private readonly List<BasePlayer> _remotePlayers = new();
+        private readonly Dictionary<BasePlayer, long> _remoteIds = new();
+
+        /// <summary>Under the veil, after the song starts: the visualizer's colours are in and the highways have drawn a
+        /// few frames (notes spawned, art built), at most 1.2 s into the 2 s lead-in.</summary>
+        private async UniTask WaitForFirstFrames()
+        {
+            var highways = FindAnyObjectByType<Visuals.HighwayCameraRendering>();
+            int from = highways != null ? highways.FramesRendered : 0;
+            float until = Time.unscaledTime + 1.2f;
+            while (Time.unscaledTime < until && this != null
+                && (Visuals.MoonVisualizer.Loading || highways != null && highways.FramesRendered - from < 10))
+            {
+                await UniTask.NextFrame();
+            }
+        }
+
+        private void AddLobbyPlayers()
+        {
+            if (Lobby.State is not { } state) return;
+            int index = _players.Count - 1;
+            foreach (var p in state.Players)
+            {
+                if (p.Id == state.You || p.SitsOut || p.Dropped || !p.Loaded) continue;
+                if (_players.Count + _remotePlayers.Count >= Lobby.MAX_PLAYERS) break;
+                if (!Lobby.Setups.TryGetValue(p.Id, out var setup) || setup.Song != state.Song) continue;
+                if (Lobby.DecodeSetup(setup.Setup) is not { } frame) continue;
+                // The vocal track shows one kind of vocals; a singer of the other kind isn't shown
+                if (frame.Profile.GameMode == GameMode.Vocals && _vocalTrackInitialized && frame.Profile.CurrentInstrument != _vocalPart) continue;
+                try
+                {
+                    var player = new YargPlayer(frame, Lobby.Feed(p.Id, state.Song), p.Name);
+                    if (SpawnPlayer(player, ++index, null) is { } spawned)
+                    {
+                        _remotePlayers.Add(spawned);
+                        _remoteIds[spawned] = p.Id;
+                    }
+                }
+                catch (Exception e)
+                {
+                    YargLogger.LogException(e, "Couldn't add a lobby player's highway");
+                }
+            }
+        }
+
+        private int _highwayIndex;
+        private Instrument _vocalPart;
+        private int _vocalIndex;
+        private bool _vocalTrackInitialized;
+
+        /// <summary>Puts a player's highway (or a place on the vocal track) in the scene, next to the ones before.
+        /// Null if there's no highway for the game mode.</summary>
+        private BasePlayer SpawnPlayer(YargPlayer player, int index, int? lastHighScore)
+        {
+            if (player.Profile.GameMode != GameMode.Vocals)
+            {
+                _highwayIndex++;
+                var prefab = player.Profile.GameMode switch
+                {
+                    GameMode.FiveFretGuitar => _fiveFretGuitarPrefab,
+                    GameMode.SixFretGuitar  => _sixFretGuitarPrefab,
+                    GameMode.FourLaneDrums  => _fourLaneDrumsPrefab,
+                    GameMode.FiveLaneDrums  => _fiveLaneDrumsPrefab,
+                    GameMode.EliteDrums     => Song.HasInstrument(Instrument.FiveLaneDrums) ? _fiveLaneDrumsPrefab : _fourLaneDrumsPrefab,
+                    GameMode.ProKeys        => player.Profile.CurrentInstrument is Instrument.ProKeys ? _proKeysPrefab : _fiveLaneKeysPrefab,
+                    GameMode.ProGuitar      => _proGuitarPrefab,
+                    _                       => null
+                };
+
+                if (prefab == null) return null;
+
+                var playerObject = Instantiate(prefab,
+                    new Vector3(_highwayIndex * TRACK_SPACING_X, 100f, 0f), prefab.transform.rotation);
+
+                // Setup player
+                var trackPlayer = playerObject.GetComponent<TrackPlayer>();
+                var trackView = _trackViewManager.CreateTrackView();
+                trackPlayer.Initialize(_highwayIndex, player, Chart, trackView, _mixer, lastHighScore);
+
+                _trackViewManager.AddTrackPlayer(trackPlayer);
+                return trackPlayer;
+            }
+            else
+            {
+                // Initialize the vocal track if it hasn't been already, and hide lyric bar
+                if (!_vocalTrackInitialized)
+                {
+                    _highwayIndex++;
+                    VocalTrack.gameObject.SetActive(true);
+                    // Position the vocal track at its highway slot so the shader's WorldPosToIndex maps it correctly
+                    VocalTrack.transform.position = new Vector3(_highwayIndex * TRACK_SPACING_X, 100, 0);
+                    _trackViewManager.CreateVocalTrackView(_highwayIndex);
+
+                    // Since all players have to select the same vocals
+                    // type (solo/harmony) this works no problem.
+                    var chart = player.Profile.CurrentInstrument == Instrument.Vocals
+                        ? Chart.Vocals
+                        : Chart.Harmony;
+                    VocalTrack.Initialize(chart, player, Song.VocalScrollSpeedScalingFactor);
+                    _vocalPart = player.Profile.CurrentInstrument;
+
+                    _lyricBar.gameObject.SetActive(false);
+                    _vocalTrackInitialized = true;
+                }
+
+                // Create the player on the vocal track
+
+                var vocalsPlayer = VocalTrack.CreatePlayer();
+                _vocalIndex++;
+                var playerHud = _trackViewManager.CreateVocalsPlayerHUD();
+
+                var percussionTrack = VocalTrack.CreatePercussionTrack();
+                percussionTrack.TrackSpeed = VocalTrack.TrackSpeed;
+                vocalsPlayer.Initialize(index, _vocalIndex, player, Chart, playerHud, percussionTrack, lastHighScore, VocalTrack.TrackSpeed);
+
+                return vocalsPlayer;
+            }
+        }
+
         private void CreatePlayers()
         {
             try
             {
                 _players = new List<BasePlayer>();
 
-                bool vocalTrackInitialized = false;
+                _vocalTrackInitialized = false;
 
                 int index = -1;
-                int highwayIndex = -1;
-                int vocalIndex = -1;
+                _highwayIndex = -1;
+                _vocalIndex = -1;
+                bool themesWorn = false;
                 foreach (var player in YargPlayers)
                 {
                     player.IsScoreValid = true;
@@ -455,75 +623,22 @@ namespace YARG.Gameplay
                         // Don't do this if it's a replay, because the replay
                         // would've already set its own presets at this point
                         player.RefreshPresets();
+                        // The online account is one person: the first human player wears its themes
+                        if (!themesWorn && !player.Profile.IsBot)
+                        {
+                            themesWorn = true;
+                            player.ApplyOnlineThemes(YARG.Menu.Main.ProfileCard.Profile);
+                        }
                     }
 
                     var lastHighScore = ScoreContainer.GetHighScore(Song.Hash, player.Profile.Id, player.Profile.CurrentInstrument, false)?.Score;
                     YargLogger.LogFormatInfo("Current high score for player {0} on {1}: {2}",
                         player.Profile.Name, player.Profile.CurrentInstrument, lastHighScore ?? 0);
 
-                    if (player.Profile.GameMode != GameMode.Vocals)
-                    {
-                        highwayIndex++;
-                        var prefab = player.Profile.GameMode switch
-                        {
-                            GameMode.FiveFretGuitar => _fiveFretGuitarPrefab,
-                            GameMode.SixFretGuitar  => _sixFretGuitarPrefab,
-                            GameMode.FourLaneDrums  => _fourLaneDrumsPrefab,
-                            GameMode.FiveLaneDrums  => _fiveLaneDrumsPrefab,
-                            GameMode.EliteDrums     => Song.HasInstrument(Instrument.FiveLaneDrums) ? _fiveLaneDrumsPrefab : _fourLaneDrumsPrefab,
-                            GameMode.ProKeys        => player.Profile.CurrentInstrument is Instrument.ProKeys ? _proKeysPrefab : _fiveLaneKeysPrefab,
-                            GameMode.ProGuitar      => _proGuitarPrefab,
-                            _                       => null
-                        };
-
-                        // Skip if there's no prefab for the game mode
-                        if (prefab == null) continue;
-
-                        var playerObject = Instantiate(prefab,
-                            new Vector3(highwayIndex * TRACK_SPACING_X, 100f, 0f), prefab.transform.rotation);
-
-                        // Setup player
-                        var trackPlayer = playerObject.GetComponent<TrackPlayer>();
-                        var trackView = _trackViewManager.CreateTrackView();
-                        trackPlayer.Initialize(highwayIndex, player, Chart, trackView, _mixer, lastHighScore);
-
-                        _players.Add(trackPlayer);
-                        _trackViewManager.AddTrackPlayer(trackPlayer);
-                    }
-                    else
-                    {
-                        // Initialize the vocal track if it hasn't been already, and hide lyric bar
-                        if (!vocalTrackInitialized)
-                        {
-                            highwayIndex++;
-                            VocalTrack.gameObject.SetActive(true);
-                            // Position the vocal track at its highway slot so the shader's WorldPosToIndex maps it correctly
-                            VocalTrack.transform.position = new Vector3(highwayIndex * TRACK_SPACING_X, 100, 0);
-                            _trackViewManager.CreateVocalTrackView(highwayIndex);
-
-                            // Since all players have to select the same vocals
-                            // type (solo/harmony) this works no problem.
-                            var chart = player.Profile.CurrentInstrument == Instrument.Vocals
-                                ? Chart.Vocals
-                                : Chart.Harmony;
-                            VocalTrack.Initialize(chart, player, Song.VocalScrollSpeedScalingFactor);
-
-                            _lyricBar.gameObject.SetActive(false);
-                            vocalTrackInitialized = true;
-                        }
-
-                        // Create the player on the vocal track
-
-                        var vocalsPlayer = VocalTrack.CreatePlayer();
-                        vocalIndex++;
-                        var playerHud = _trackViewManager.CreateVocalsPlayerHUD();
-
-                        var percussionTrack = VocalTrack.CreatePercussionTrack();
-                        percussionTrack.TrackSpeed = VocalTrack.TrackSpeed;
-                        vocalsPlayer.Initialize(index, vocalIndex, player, Chart, playerHud, percussionTrack, lastHighScore, VocalTrack.TrackSpeed);
-
-                        _players.Add(vocalsPlayer);
-                    }
+                    var spawned = SpawnPlayer(player, index, lastHighScore);
+                    // Skip if there's no prefab for the game mode
+                    if (spawned == null) continue;
+                    _players.Add(spawned);
 
                     // Add (or increase total of) the stem state
                     var stem = player.Profile.CurrentInstrument.ToSongStem();

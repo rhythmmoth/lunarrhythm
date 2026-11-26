@@ -2,7 +2,8 @@
 
 LunarRhythm is a pad rhythm game, built as a fork of [YARG](https://github.com/YARC-Official/YARG) (Yet Another Rhythm
 Game). It plays Festival-style songs on keyboard or controller: five lanes, four parts (Lead, Bass, Drums, Vocals),
-lifts, Overdrive and Festival scoring. Songs come from an online song list, with online leaderboards.
+lifts, Overdrive and Festival scoring, on a 2D highway (or the classic 3D one). Songs come from an online song list,
+with leaderboards, seasons, levels and cosmetics, and online lobbies of up to four players.
 
 This repository is the game's source code, published as YARG's license (LGPL-3.0) requires. The servers it talks to
 (song list, file hosting and leaderboards) are not part of it, and neither are any songs.
@@ -41,11 +42,34 @@ LunarRhythm is a modified version of YARG and YARG.Core. The main changes, and w
   - Runs are sent with the chart's hash and checked by the server.
   - Runs that fail to send are queued and retried.
   - Each song in the library shows its board.
+- **Accounts and progression** (`Assets/Script/Menu/Main`, `YARG.Core/YARG.Core/Song/Online/Leaderboards.cs`):
+  - Playing needs a Discord sign-in (`AccountGate.cs`); a saved sign-in allows offline play for 24 hours.
+  - Seasons and featured songs head the library, with a season leaderboard.
+  - XP and levels from accepted runs, with daily, weekly and season challenges (`ChallengesMenu.cs`).
+  - A profile card and popup for cosmetics: aliases, frames, banners, note and highway colours, note shapes and hit
+    effects (`ProfileCard.cs`, `ProfilePopup.cs`, `YARG.Core/YARG.Core/Song/Online/OnlineThemes.cs`).
+  - Each run is sent with a recording of its inputs, so the server can replay it and check the score.
+- **Online play** (`Assets/Script/Menu/Online`, `YARG.Core/YARG.Core/Song/Online/Lobby.cs`):
+  - Lobbies of up to four with join codes, a shared setlist (one pick each), and a synchronised start.
+  - The other players' highways play from their streamed inputs, a quarter of a second behind.
+- **2D highway** (`Assets/Script/Gameplay/Visuals/FlatHighway.cs`, `FlatHighwayArt.cs`):
+  - The default view: the track from above, leaning back a little, with flat notes, frets and lane art drawn in
+    code. Overdrive phrases turn notes white.
+  - Several players stand side by side at the same size, each with a name tag and a compact HUD.
+  - The **2D highway** setting (Graphics) turns it off for YARG's 3D highway.
 - **Gameplay and menus** (`Assets/Script/Gameplay`, `Assets/Script/Menu`):
   - All four parts play on a five-lane pad track.
   - The solo box shows no bonus step.
-  - A news line on the title screen (`Menu/Main/NewsTicker.cs`).
-  - Menus and default bindings are reworked for the pad game.
+  - Every menu is redrawn in one flat night look ("Moonlight", `Menu/Common/Moonlight.cs`), with its own
+    transitions (`Menu/Common/Moonrise.cs`) and a first-run tour.
+  - Song backgrounds are a music visualizer that changes style with the song's genre (`Gameplay/Visuals/MoonVisualizer.cs`).
+  - A jukebox plays in the menus, and a news line runs on the title screen (`Menu/Main/NewsTicker.cs`).
+  - Settings sliders can be dragged; lanes, Overdrive, Pause and the menu keys are rebound from the Players menu.
+  - Default bindings are reworked for the pad game.
+- **Auto-updater** (`Assets/Script/Menu/Persistent/AutoUpdater.cs`, `YARG.Core/YARG.Core/Song/Online/BuildUpdate.cs`):
+  - At start, the game compares itself with the latest build's file list and downloads only the files that changed,
+    each checked against its SHA-256. Each build is stamped with when it was made
+    (`Assets/Editor/Build/BuildStamp.cs`), so only a newer build replaces it.
 
 YARG's own history is in the [YARG](https://github.com/YARC-Official/YARG) and
 [YARG.Core](https://github.com/YARC-Official/YARG.Core) repositories.
@@ -76,15 +100,18 @@ until you set up your own:
 | What | Where |
 | --- | --- |
 | Song list address, and which hosts get the API key | `DATABASE_URL` and `KEY_DOMAIN` in `YARG.Core/YARG.Core/Song/Online/OnlineSongs.cs` |
-| Leaderboard server address | `BASE_URL` in `YARG.Core/YARG.Core/Song/Online/Leaderboards.cs` |
-| API key the game sends | `Assets/Resources/OnlineApiKey.txt` (one line; git-ignored, so never commit it) |
+| Leaderboard server address (also used for sign-in, progression and the lobby WebSocket) | `BASE_URL` in `YARG.Core/YARG.Core/Song/Online/Leaderboards.cs` |
+| Where the auto-updater looks for new builds | `MANIFEST_URL` and `ZIP_URL` in `YARG.Core/YARG.Core/Song/Online/BuildUpdate.cs` |
+| API key the game sends | `Assets/Resources/OnlineApiKey.txt` (one line; git-ignored, so never commit it). **LunarRhythm → Scramble the API key** in the editor stores it scrambled |
 
-`OnlineSongs.cs` and `Leaderboards.cs` show the request and response formats the game expects.
+`OnlineSongs.cs`, `Leaderboards.cs` and `Lobby.cs` show the request and response formats the game expects. Without a
+server, the game stops at the sign-in screen, in builds and in the editor alike.
 
 ## Testing with local songs
 
 Builds only play online songs. In the Unity editor, turn on **LunarRhythm → Load Local Songs (debug)** and put song
-folders in a `songs` folder next to the executable (in the editor, that's the project folder). A Festival song folder
+folders in a `songs` folder next to the executable (in the editor, that's the project folder). Signing in still goes through
+your leaderboard server. A Festival song folder
 looks like this:
 
 ```

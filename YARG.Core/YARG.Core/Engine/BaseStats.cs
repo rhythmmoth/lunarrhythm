@@ -116,6 +116,12 @@ namespace YARG.Core.Engine
         public int NotesMissed => TotalNotes - NotesHit;
 
         /// <summary>
+        /// The misses a player sees: missed notes, plus (where an engine has them) presses with no note there,
+        /// which break the streak just the same.
+        /// </summary>
+        public virtual int Misses => NotesMissed;
+
+        /// <summary>
         /// The percent of notes hit.
         /// </summary>
         public virtual float Percent => TotalNotes == 0 ? 1f : (float) NotesHit / TotalNotes;

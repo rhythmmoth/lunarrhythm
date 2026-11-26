@@ -90,11 +90,103 @@ namespace YARG.Gameplay.Visuals
             _hasPressedParam = ThemeBind.Animator.HasParameter(_pressed);
             _hasSustainParam = ThemeBind.Animator.HasParameter(_sustain);
             _hasOpenMissTrigger = ThemeBind.Animator.HasParameter(_openMiss);
+
+            if (FlatHighway.Enabled && _flatMark == null && FlatHighwayArt.Ready) MakeFlat();
+        }
+
+        // The 2D highway's strike line mark: the worn note shape in the lane colour (its outline, or a faint fill for
+        // gem, star and crescent), filled while held; and the worn hit effect (board NextHighwayCosmetics)
+        private MeshRenderer _flatMark, _flatFill;
+        private float _flatPressed, _flatFlash;
+        private MeshRenderer[] _hitPieces;
+        private string _hitEffect;
+        private float _pillWidth, _hitAge = -1f;
+        private static readonly UnityEngine.Color Cream = new(0.953f, 0.91f, 0.8f, 1f);
+        private static readonly float[] MoteOffsets = { -0.25f, 0.05f, 0.3f };
+
+        private void MakeFlat()
+        {
+            var footprint = FlatHighwayArt.HideModel(transform);
+            var player = FlatHighwayArt.PlayerOf(this);
+            var art = FlatHighwayArt.Shape(player?.NoteShape);
+            _pillWidth = Mathf.Max(footprint.size.x * 0.75f, 0.1f) * FlatHighway.NoteScale;
+            float width = Mathf.Min(_pillWidth * art.NoteSize.x / 56f, FlatHighway.MaxNoteWidth), depth = 0.2f * art.NoteSize.y / 20f * FlatHighway.NoteScale;
+            // A dark socket under the mark, so it reads as pressed into the track (board NextHighwayDepth, E)
+            FlatHighwayArt.Piece(transform, "Flat Socket", art.Note, new UnityEngine.Color(0f, 0f, 0f, 0.45f), width, depth, 0.006f, 1);
+            _flatFill = FlatHighwayArt.Piece(transform, "Flat Fill", art.Note, UnityEngine.Color.clear, width, depth, 0.008f, 2);
+            _flatMark = FlatHighwayArt.Piece(transform, "Flat Mark", art.FilledMark ? art.Note : art.NoteRing,
+                _originalUnityTopColor.WithAlpha(art.FilledMark ? 0.45f : 1f), width, depth, 0.01f, 3);
+
+            _hitEffect = player?.HitEffect is "ripple-hit" or "stardust-hit" ? player.HitEffect : "burst-hit";
+            var texture = _hitEffect switch
+            {
+                "ripple-hit" => FlatHighwayArt.CircleRing,
+                "stardust-hit" => FlatHighwayArt.Dot,
+                _ => FlatHighwayArt.Glow,
+            };
+            _hitPieces = new MeshRenderer[_hitEffect == "stardust-hit" ? 3 : 1];
+            for (int i = 0; i < _hitPieces.Length; i++)
+            {
+                _hitPieces[i] = FlatHighwayArt.Piece(transform, "Flat Hit Effect", texture, UnityEngine.Color.clear, 0.01f, 0.01f, 0.014f, 4);
+                _hitPieces[i].enabled = false;
+            }
+        }
+
+        private void UpdateFlat()
+        {
+            if (_flatFill == null) return;
+            // Held: mostly filled; a hit flashes it full and fades back
+            _flatFlash = Mathf.MoveTowards(_flatFlash, 0f, Time.deltaTime * 5f);
+            float fill = Mathf.Max(_flatPressed * 0.55f, _flatFlash);
+            FlatHighwayArt.SetColor(_flatFill, _originalUnityTopColor.WithAlpha(fill));
+            UpdateHitEffect();
+        }
+
+        // A size given in screen pixels at the strike line (the pill mark is about 80 × 28 at 1080p), as a flat piece's scale
+        private Vector3 Pixels(float w, float h) => new(_pillWidth * w / 80f, 0.2f * h / 28f, 1f);
+
+        // Burst: a glow swelling and fading. Ripple: a thin ring spreading out. Stardust: three motes rising up the track.
+        private void UpdateHitEffect()
+        {
+            if (_hitAge < 0f) return;
+            _hitAge += Time.deltaTime;
+            bool done = true;
+            for (int i = 0; i < _hitPieces.Length; i++)
+            {
+                var piece = _hitPieces[i];
+                float t;
+                var colour = _originalUnityTopColor;
+                switch (_hitEffect)
+                {
+                    case "ripple-hit":
+                        t = _hitAge / 0.45f;
+                        piece.transform.localScale = Pixels(Mathf.Lerp(24f, 90f, t), Mathf.Lerp(24f, 90f, t));
+                        break;
+                    case "stardust-hit":
+                        t = (_hitAge - i * 0.06f) / 0.5f;
+                        float size = 14f - 2f * i;
+                        piece.transform.localScale = Pixels(size, size);
+                        piece.transform.localPosition = new Vector3(_pillWidth * MoteOffsets[i], 0.014f,
+                            Mathf.Lerp(0f, 0.4f, Mathf.Clamp01(t)));
+                        if (i != 1) colour = Cream;
+                        break;
+                    default:
+                        t = _hitAge / 0.35f;
+                        float glow = Mathf.Lerp(40f, 110f, 1f - (1f - Mathf.Clamp01(t)) * (1f - Mathf.Clamp01(t)));
+                        piece.transform.localScale = Pixels(glow, glow);
+                        break;
+                }
+                piece.enabled = t >= 0f && t < 1f;
+                if (t < 1f) done = false;
+                if (piece.enabled) FlatHighwayArt.SetColor(piece, colour.WithAlpha(1f - t));
+            }
+            if (done) _hitAge = -1f;
         }
 
         public void Update()
         {
             UpdateColor();
+            UpdateFlat();
         }
 
         public void SetPressed(bool pressed)
@@ -166,6 +258,7 @@ namespace YARG.Gameplay.Visuals
 
         public void SetPressed(bool pressed, float value)
         {
+            _flatPressed = pressed ? value : 0f;
             foreach (var material in _innerMaterials)
             {
                 material.SetFloat(_fade, value);
@@ -188,6 +281,8 @@ namespace YARG.Gameplay.Visuals
 
         public void PlayHitAnimation()
         {
+            _flatFlash = 1f;
+            if (_hitPieces != null) _hitAge = 0f;
             ThemeBind.Animator.SetTrigger(_hit);
         }
 
@@ -198,11 +293,13 @@ namespace YARG.Gameplay.Visuals
 
         public void PlayHitParticles()
         {
+            if (_hitPieces != null) return; // the 2D highway's hit effect cosmetic stands in for the theme's
             ThemeBind.HitEffect.Play();
         }
 
         public void PlayOpenHitParticles()
         {
+            if (_hitPieces != null) return;
             ThemeBind.OpenHitEffect.Play();
         }
 

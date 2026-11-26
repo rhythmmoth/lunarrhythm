@@ -26,7 +26,7 @@ namespace YARG.Gameplay.Visuals
         private const float MAX_LANE_SCREEN_HEIGHT_PERCENT = 0.55f;
 
         //In single player, allow more height
-        private const float MAX_LANE_HEIGHT_SP = 0.72f;
+        private const float MAX_LANE_HEIGHT_SP = 0.76f; // board NextMoonHighway: a little bigger than the first 0.72
 
         //This controls padding between lanes for multiple lanes by shrinking each lane from its full width
         //1.0f = no padding (full width), 0.9f means 90% of full width
@@ -62,6 +62,10 @@ namespace YARG.Gameplay.Visuals
         private readonly Matrix4x4[] _camInvViewMatrices = new Matrix4x4[MAX_MATRICES];
         private readonly Matrix4x4[] _camProjMatrices = new Matrix4x4[MAX_MATRICES];
         private readonly float[] _laneScales = new float[MAX_MATRICES];
+        private readonly bool[] _upscroll = new bool[MAX_MATRICES];
+
+        /// <summary>Frames drawn with at least one highway: the song's veil lifts once a few have gone by.</summary>
+        public int FramesRendered { get; private set; }
 
         public static readonly int YargHighwaysNumberID = Shader.PropertyToID("_YargHighwaysN");
         public static readonly int YargHighwayCamViewMatricesID = Shader.PropertyToID("_YargCamViewMatrices");
@@ -143,6 +147,13 @@ namespace YARG.Gameplay.Visuals
 
             // Use the individual highway camera instead of the main render camera
             var highwayCamera = _cameras[index];
+            if (FlatHighway.Enabled && highwayCamera != _vocalTrack?.GetTrackCamera())
+            {
+                // Straight down, every point is the same distance away: fade along the track instead, as the fade
+                // shader measures it (the fragment's z less the camera's)
+                float cameraZ = highwayCamera.transform.position.z;
+                return new Vector2(worldZeroFadePosition.z - cameraZ, worldFullFadePosition.z - cameraZ);
+            }
             Plane farPlane = new Plane();
 
             farPlane.SetNormalAndPosition(highwayCamera.transform.forward, worldZeroFadePosition);
@@ -201,6 +212,11 @@ namespace YARG.Gameplay.Visuals
             foreach (var camera in _cameras)
             {
                 camera.aspect = (float)Screen.width / Screen.height;
+                // The flat highway's lanes are drawn wider than the track's own proportions
+                if (FlatHighway.Enabled && camera != _vocalTrack?.GetTrackCamera())
+                {
+                    camera.aspect /= FlatHighway.LaneStretch;
+                }
             }
 
             //First pass, just scale according to aspect ratio, then recalculate matrices
@@ -232,7 +248,8 @@ namespace YARG.Gameplay.Visuals
 
                 // Also calculate scale factor needed to fit within 50% of screen height
                 // This single player special case is different because here we care if vocals are present
-                float targetScreenHeight = _gameManager?.TotalPlayers < 2
+                // Flat highways sit side by side as full-height columns (board NextHighwayModes)
+                float targetScreenHeight = _gameManager?.TotalPlayers < 2 || FlatHighway.Enabled
                     ? Screen.height * MAX_LANE_HEIGHT_SP
                     // Track height can be taller if there is only one player
                     : Screen.height * MAX_LANE_SCREEN_HEIGHT_PERCENT;
@@ -245,6 +262,21 @@ namespace YARG.Gameplay.Visuals
                 // Use the more restrictive scale factor
                 float scaleFactor = Math.Min(scaleFactorWidth, scaleFactorHeight);
                 _laneScales[i] *= scaleFactor;
+            }
+
+            // Side by side, flat highways are all drawn the same size (the most limited one's), so lanes line up
+            // and share one strike line: a longer highway length then just reaches further up
+            if (FlatHighway.Enabled && HighwayCount() > 1)
+            {
+                float smallest = float.MaxValue;
+                for (int i = 0; i < _cameras.Count; i++)
+                {
+                    if (_cameras[i] != _vocalTrack?.GetTrackCamera()) smallest = Math.Min(smallest, _laneScales[i]);
+                }
+                for (int i = 0; i < _cameras.Count; i++)
+                {
+                    if (_cameras[i] != _vocalTrack?.GetTrackCamera()) _laneScales[i] = smallest;
+                }
             }
         }
 
@@ -301,7 +333,8 @@ namespace YARG.Gameplay.Visuals
             // This effectively disables rendering it but keeps components active
             var cameraData = trackPlayer.TrackCamera.GetUniversalAdditionalCameraData();
             cameraData.renderType = CameraRenderType.Overlay;
-            AddPlayerParams(trackPlayer.transform.position, trackPlayer.TrackCamera, trackPlayer.Player.CameraPreset.CurveFactor, trackPlayer.ZeroFadePosition, trackPlayer.FadeSize, trackPlayer.Player.CameraPreset.Rotation);
+            _upscroll[_cameras.Count] = FlatHighway.IsUpscroll(trackPlayer.Player);
+            AddPlayerParams(trackPlayer.transform.position, trackPlayer.TrackCamera, FlatHighway.ViewOf(trackPlayer.Player).CurveFactor, trackPlayer.ZeroFadePosition, trackPlayer.FadeSize, FlatHighway.ViewOf(trackPlayer.Player).Rotation);
         }
 
         public void AddVocalTrack(VocalTrack vocalTrack, int highwayIndex)
@@ -403,6 +436,7 @@ namespace YARG.Gameplay.Visuals
             }
 
             RecalculateFadeParams();
+            FramesRendered++;
 
             int highwayIndex = 0;
             for (int i = 0; i < _cameras.Count; ++i)
@@ -460,13 +494,33 @@ namespace YARG.Gameplay.Visuals
                 }
                 else
                 {
-                    projMatrix = GetModifiedProjectionMatrix(camera.projectionMatrix,
+                    projMatrix = GetModifiedProjectionMatrix(
+                        _upscroll[i] ? UpscrollMirror(i) * camera.projectionMatrix : camera.projectionMatrix,
                         highwayIndex, HighwayCount(), _laneScales[i], horizontalOffsetNdc);
                     highwayIndex++;
                 }
                 _camProjMatrices[i] = GL.GetGPUProjectionMatrix(projMatrix, SystemInfo.graphicsUVStartsAtTop);
                 Shader.SetGlobalMatrixArray(YargHighwayCamProjMatricesID, _camProjMatrices);
             }
+        }
+
+        /// <summary>
+        /// Upscroll on the 2D highway: flips the highway top to bottom within its own frame (the track's bottom on
+        /// screen to where it fades out), so it stays in place with the strike line at its top edge. Applied in clip
+        /// space: y becomes 2 * middle * w - y.
+        /// </summary>
+        private Matrix4x4 UpscrollMirror(int index)
+        {
+            var camera = _cameras[index];
+            var position = _highwayPositions[index];
+            var viewProjection = camera.projectionMatrix * camera.worldToCameraMatrix;
+            var bottom = viewProjection * new Vector4(position.x, position.y, FindTrackBottom(camera, position), 1f);
+            var top = viewProjection * new Vector4(position.x, position.y, _zeroFadePositions[index], 1f);
+            float middle = (bottom.y / bottom.w + top.y / top.w) / 2f;
+            var mirror = Matrix4x4.identity;
+            mirror.m11 = -1f;
+            mirror.m13 = 2f * middle;
+            return mirror;
         }
 
         private static Matrix4x4 GetOrthographicProjectionMatrix(Camera camera, Rect layoutRect)
@@ -524,6 +578,7 @@ namespace YARG.Gameplay.Visuals
             float offsetX = centerX + GetMultiplayerXOffset(index, highwayCount,
                 -1f * SettingsManager.Settings.HighwayTiltMultiplier.Value / highwayCount) + horizontalOffsetNdc;
             float offsetY = -1.0f + highwayScale; // Offset down if scaled vertically
+            if (FlatHighway.Enabled) offsetY += FlatHighway.Raise;
 
             // This matrix modifies the output of clip space before perspective divide
             // Performs: clip.xy = clip.xy * scale + offset * clip.w
@@ -624,8 +679,9 @@ namespace YARG.Gameplay.Visuals
         // Offset is defined from -1f to 1f
         public static float GetMultiplayerXOffset(int playerIndex, int totalPlayers, float magnitude)
         {
-            // No need to offset if only one or fewer players
-            if (totalPlayers < 2)
+            // No need to offset if only one or fewer players; flat highways stand straight side by side (seen from
+            // a camera moved sideways, the tilted 2D view skews and changes size per highway)
+            if (totalPlayers < 2 || FlatHighway.Enabled)
             {
                 return 0f;
             }
@@ -708,6 +764,21 @@ namespace YARG.Gameplay.Visuals
         /// <param name="x">The normalized position across the track width (0.0 is leftmost track edge. 1.0 is rightmost track edge)</param>
         /// <param name="y">The normalized position up the track (0.0 is the strikeline, 1.0 is zero fade position)</param>
         /// <returns>A Vector2 in screen pixels, or Vector2.zero if unavailable.</returns>
+        /// <summary>
+        /// As <see cref="GetTrackPositionScreenSpace"/>, but as if the highway weren't flipped: upscroll turns the
+        /// highway over within its frame, while the HUD around it (popups, names) stays where it is.
+        /// </summary>
+        public Vector2? GetTrackPositionScreenSpaceUnflipped(int trackIndex, float x, float y)
+        {
+            var position = GetTrackPositionScreenSpace(trackIndex, x, y);
+            if (position == null || trackIndex < 0 || trackIndex >= _cameras.Count || !_upscroll[trackIndex])
+            {
+                return position;
+            }
+            var frame = GetTrackBoundsScreenSpace(trackIndex);
+            return frame == null ? position : new Vector2(position.Value.x, 2f * frame.Value.center.y - position.Value.y);
+        }
+
         public Vector2? GetTrackPositionScreenSpaceRaised(int trackIndex, float x, float y)
         {
             return GetTrackPositionScreenSpace(trackIndex, x, y, _raisedRotations[trackIndex]);

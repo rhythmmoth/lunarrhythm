@@ -11,6 +11,17 @@ namespace YARG.Core.IO
         private readonly        int   _length;
         private                 int   _position;
 
+        /// <summary>A count read from the data, checked against what's left: each item takes at least itemSize bytes,
+        /// so a crafted count can't make the reader allocate far more than the data holds.</summary>
+        public readonly int ReadCount(int count, int itemSize)
+        {
+            if (count < 0 || count > (_length - _position) / itemSize)
+            {
+                throw new System.IO.InvalidDataException($"count {count} is more than the data holds");
+            }
+            return count;
+        }
+
         public int Position
         {
             readonly get => _position;

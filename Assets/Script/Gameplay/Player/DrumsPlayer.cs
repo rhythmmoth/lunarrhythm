@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using YARG.Core.Replays.Analyzer;
 using YARG.Core;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
@@ -133,10 +134,7 @@ namespace YARG.Gameplay.Player
 
         public override bool ShouldUpdateInputsOnResume => false;
 
-        protected override float[] StarMultiplierThresholds { get; set; } =
-        {
-            0.06f, 0.12f, 0.2f, 0.45f, 0.75f, 1.09f
-        };
+        protected override float[] StarMultiplierThresholds { get; set; } = StarThresholds.Drums;
 
         private int[] _drumSoundEffectRoundRobin = new int[8];
         private float _drumSoundEffectAccentThreshold;
@@ -188,7 +186,8 @@ namespace YARG.Gameplay.Player
             }
 
             var engine = new YargDrumsEngine(NoteTrack, SyncTrack, EngineParams, Player.Profile.IsBot, Player.Profile.GameMode is GameMode.EliteDrums);
-            EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
+            // Others' highways stay out of band scoring, star power and the fail meter
+            if (!Player.IsRemote) EngineContainer = GameManager.EngineManager.Register(engine, NoteTrack.Instrument, Chart, Player.RockMeterPreset);
 
             HitWindow = EngineParams.HitWindow;
 
@@ -361,7 +360,7 @@ namespace YARG.Gameplay.Player
 
         public override void SetStemMuteState(bool muted)
         {
-            if (IsStemMuted != muted)
+            if (IsStemMuted != muted && !Player.IsRemote) // others' highways never touch the audio
             {
                 GameManager.ChangeStemMuteState(SongStem.Drums, muted);
                 IsStemMuted = muted;
@@ -639,6 +638,7 @@ namespace YARG.Gameplay.Player
 
         private void PlayDrumSoundEffect(DrumsAction action, float velocity)
         {
+            if (Player.IsRemote) return;
             int actionIndex = (int) action;
 
             if (actionIndex == (int) DrumsAction.WildcardPad)

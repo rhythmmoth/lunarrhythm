@@ -13,6 +13,23 @@ using YARG.Helpers;
 
 namespace YARG.Song
 {
+    public enum MajorGenre
+    {
+        Alternative,
+        CountryFolk,
+        ClassicalTraditional,
+        DanceElectronic,
+        HipHop,
+        JazzBlues,
+        Metal,
+        Pop,
+        PunkSceneCore,
+        RnbSoulFunk,
+        Rock,
+        World,
+        Other
+    }
+
     public static partial class Genrelizer
     {
         private static Dictionary<string, Mapping> _mappings = new(StringComparer.OrdinalIgnoreCase);
@@ -73,23 +90,46 @@ namespace YARG.Song
             }
         }
 
-        private static SortString Overgenrelize(SortString genre)
+        private static SortString Overgenrelize(SortString genre) => Major(genre.SortStr) switch
         {
-            return genre.SortStr switch
+            MajorGenre.Alternative => OVER_ALTERNATIVE,
+            MajorGenre.CountryFolk => OVER_COUNTRY_FOLK,
+            MajorGenre.ClassicalTraditional => OVER_CLASSICAL_TRADITIONAL,
+            MajorGenre.DanceElectronic => OVER_DANCE_ELECTRONIC,
+            MajorGenre.HipHop => OVER_HIP_HOP,
+            MajorGenre.JazzBlues => OVER_JAZZ_BLUES,
+            MajorGenre.Metal => OVER_METAL,
+            MajorGenre.Pop => OVER_POP,
+            MajorGenre.PunkSceneCore => OVER_PUNK_SCENE_CORE,
+            MajorGenre.RnbSoulFunk => OVER_RNB_SOUL_FUNK,
+            MajorGenre.Rock => OVER_ROCK,
+            MajorGenre.World => OVER_WORLD,
+            _ => OVER_OTHER
+        };
+
+        /// <summary>The major genre a song belongs to: its own tags through the official list, grouped as the music
+        /// library's broad genres are (the in-game visualizer picks its sky from it).</summary>
+        public static MajorGenre MajorOf(SongEntry song) =>
+            Major(_getGenresOrDefault(song.RawGenre, song.RawSubgenre, song.Artist).Genre.SortStr);
+
+        private static MajorGenre Major(string genre)
+        {
+            return genre switch
             {
                 ALTERNATIVE or
-                INDIE_ROCK => OVER_ALTERNATIVE,
+                INDIE_ROCK => MajorGenre.Alternative,
 
                 COUNTRY or
                 FOLK or
-                SOUTHERN_ROCK => OVER_COUNTRY_FOLK,
+                SOUTHERN_ROCK => MajorGenre.CountryFolk,
 
                 CHILDRENS_MUSIC or
                 CLASSICAL or
                 HOLIDAY or
+                CHRISTMAS or
                 ORCHESTRAL or
                 SOUNDTRACK or
-                TRADITIONAL => OVER_CLASSICAL_TRADITIONAL,
+                TRADITIONAL => MajorGenre.ClassicalTraditional,
 
                 AMBIENT_DRONE or
                 CHIPTUNE or
@@ -102,14 +142,14 @@ namespace YARG.Song
                 HOUSE or
                 IDM or
                 TECHNO or
-                TRANCE => OVER_DANCE_ELECTRONIC,
+                TRANCE => MajorGenre.DanceElectronic,
 
                 HIP_HOP_RAP or
-                TRAP => OVER_HIP_HOP,
+                TRAP => MajorGenre.HipHop,
 
                 BLUES or
                 FUSION or
-                JAZZ => OVER_JAZZ_BLUES,
+                JAZZ => MajorGenre.JazzBlues,
 
                 DEATH_BLACK_METAL or
                 DJENT or
@@ -118,24 +158,24 @@ namespace YARG.Song
                 GROOVE_METAL or
                 HEAVY_METAL or
                 MELODIC_POWER_METAL or
-                THRASH_SPEED_METAL => OVER_METAL,
+                THRASH_SPEED_METAL => MajorGenre.Metal,
 
                 BALLAD or
                 J_POP or
                 K_POP or
                 NEW_WAVE or
                 POP or
-                SYNTHPOP_ELECTROPOP => OVER_POP,
+                SYNTHPOP_ELECTROPOP => MajorGenre.Pop,
 
                 EMO or
                 METALCORE or
                 NU_METAL or
                 POP_PUNK or
                 POST_HARDCORE or
-                PUNK => OVER_PUNK_SCENE_CORE,
+                PUNK => MajorGenre.PunkSceneCore,
 
                 RNB_SOUL_FUNK or
-                DISCO => OVER_RNB_SOUL_FUNK,
+                DISCO => MajorGenre.RnbSoulFunk,
 
                 CLASSIC_ROCK or
                 ELECTRONIC_ROCK or
@@ -151,13 +191,13 @@ namespace YARG.Song
                 ROCK or
                 ROCK_AND_ROLL or
                 SKA or
-                SURF_ROCK => OVER_ROCK,
+                SURF_ROCK => MajorGenre.Rock,
 
                 LATIN or
                 REGGAE or
-                WORLD => OVER_WORLD,
+                WORLD => MajorGenre.World,
 
-                _ => OVER_OTHER
+                _ => MajorGenre.Other
             };
         }
 
@@ -194,6 +234,8 @@ namespace YARG.Song
 
             context.SetSubText("Loading genre mappings...");
             _readGenreMappings();
+            // The official list has no "christmas" alias: it counts as holiday
+            if (_mappings.TryGetValue(HOLIDAY, out var holiday)) _mappings.TryAdd(CHRISTMAS, holiday);
         }
 
         private static void _addMapping(string key, Mapping mapping)
